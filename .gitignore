@@ -1,0 +1,21 @@
+# Secrets / configuration locale
+.env
+.env.*
+!.env.example
+
+# Binaires Go
+/bin/
+/dist/
+*.exe
+*.test
+
+# Fichiers de couverture de tests
+*.out
+coverage.*
+
+# Fichiers d'édition / OS
+*~
+.DS_Store
+
+# Dépendances vendored (si non utilisées volontairement)
+/vendor/
