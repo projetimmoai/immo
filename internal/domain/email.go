@@ -2,15 +2,15 @@ package domain
 
 import "time"
 
-// Valeurs connues de categorie_email.description (voir migration 001).
-// Ce sont des tables de référence éditables en base : ces constantes servent
-// de clés de recherche (par description), jamais d'ID en dur.
+// Valeurs connues de action.description (voir migration 001). Ce sont des
+// tables de référence éditables en base : ces constantes servent de clés de
+// recherche (par description), jamais d'ID en dur.
 const (
-	CategorieEmailSinistre          = "sinistre"
-	CategorieEmailIncident          = "incident"
-	CategorieEmailAssembleeGenerale = "assemblee_generale"
-	CategorieEmailAutre             = "autre"
-	CategorieEmailIndetermine       = "indetermine"
+	ActionSinistre          = "sinistre"
+	ActionIncident          = "incident"
+	ActionAssembleeGenerale = "assemblee_generale"
+	ActionAutre             = "autre"
+	ActionIndetermine       = "indetermine"
 )
 
 // Valeurs connues de email_statut_traitement.description.
@@ -22,11 +22,22 @@ const (
 	EmailStatutErreur    = "erreur"
 )
 
-// CategorieEmail est une table de référence (sinistre, incident, AG, autre...).
-type CategorieEmail struct {
+// Action est la table de référence racine du routage des e-mails (sinistre,
+// incident, AG, autre...), et plus largement de toute décision de routage.
+type Action struct {
 	ID          int64
 	CreatedAt   time.Time
 	Description string
+}
+
+// SousAction est une sous-catégorie d'une Action (ex: "degat_des_eaux" sous
+// "sinistre"), scoped à son Action parente : sa Description n'est unique que
+// parmi les sous_action d'une même Action (contrainte UNIQUE(action_id, description)).
+type SousAction struct {
+	ID          int64
+	CreatedAt   time.Time
+	Description string
+	ActionID    int64 // FK -> action.id
 }
 
 // EmailStatutTraitement est une table de référence pour le statut de
@@ -48,7 +59,8 @@ type Email struct {
 	Objet                *string
 	CorpsTexte           *string
 	CorpsHTML            *string
-	CategorieID          *int64 // FK -> categorie_email.id, nul tant que non classifié
+	ActionID             *int64 // FK -> action.id, nul tant que non classifié
+	SousActionID         *int64 // FK -> sous_action.id, nul tant que non classifié (ou si l'action n'a pas de sous-action)
 	CoproprieteID        *int64 // FK -> copropriete.id, résolu si identifiable
 	LotID                *int64 // FK -> lot.id, résolu si identifiable
 	StatutTraitementID   int64  // FK -> email_statut_traitement.id, NOT NULL : à fixer explicitement à l'insertion (pas de DEFAULT en base)

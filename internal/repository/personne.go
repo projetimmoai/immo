@@ -78,3 +78,79 @@ func (c *Client) GetPersonne(ctx context.Context, id int64) (*domain.Personne, e
 	}
 	return rows[0].toDomain(), nil
 }
+
+// personnePhysiqueRow est la représentation JSON d'une ligne de la table personne_physique.
+type personnePhysiqueRow struct {
+	ID         int64     `json:"id"`
+	CreatedAt  time.Time `json:"created_at"`
+	Nom        *string   `json:"nom"`
+	Prenom     *string   `json:"prenom"`
+	PersonneID *int64    `json:"personne_id"`
+	GenreID    *int64    `json:"genre_id"`
+}
+
+func (r personnePhysiqueRow) toDomain() *domain.PersonnePhysique {
+	return &domain.PersonnePhysique{
+		ID:         r.ID,
+		CreatedAt:  r.CreatedAt,
+		Nom:        r.Nom,
+		Prenom:     r.Prenom,
+		PersonneID: r.PersonneID,
+		GenreID:    r.GenreID,
+	}
+}
+
+// FindPersonnePhysiqueByPersonneID récupère la ligne PersonnePhysique
+// associée à une Personne (pertinent quand Personne.EstPhysique est vrai).
+// Retourne (nil, nil), sans erreur, si aucune ligne ne correspond.
+func (c *Client) FindPersonnePhysiqueByPersonneID(ctx context.Context, personneID int64) (*domain.PersonnePhysique, error) {
+	var rows []personnePhysiqueRow
+	path := fmt.Sprintf("/personne_physique?select=*&personne_id=eq.%d&limit=1", personneID)
+	if err := c.do(ctx, http.MethodGet, path, nil, &rows); err != nil {
+		return nil, fmt.Errorf("repository: recherche personne_physique par personne_id=%d: %w", personneID, err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return rows[0].toDomain(), nil
+}
+
+// personneMoraleRow est la représentation JSON d'une ligne de la table personne_morale.
+type personneMoraleRow struct {
+	ID                int64     `json:"id"`
+	CreatedAt         time.Time `json:"created_at"`
+	Nom               *string   `json:"nom"`
+	EmailFactures     *string   `json:"email_factures"`
+	EstCabinetGestion *bool     `json:"est_cabinet_gestion"`
+	FormeJuridiqueID  *int64    `json:"forme_juridique_id"`
+	PersonneID        *int64    `json:"personne_id"`
+	EstFournisseur    *bool     `json:"est_fournisseur"`
+}
+
+func (r personneMoraleRow) toDomain() *domain.PersonneMorale {
+	return &domain.PersonneMorale{
+		ID:                r.ID,
+		CreatedAt:         r.CreatedAt,
+		Nom:               r.Nom,
+		EmailFactures:     r.EmailFactures,
+		EstCabinetGestion: r.EstCabinetGestion,
+		FormeJuridiqueID:  r.FormeJuridiqueID,
+		PersonneID:        r.PersonneID,
+		EstFournisseur:    r.EstFournisseur,
+	}
+}
+
+// FindPersonneMoraleByPersonneID récupère la ligne PersonneMorale associée à
+// une Personne (pertinent quand Personne.EstPhysique est faux). Retourne
+// (nil, nil), sans erreur, si aucune ligne ne correspond.
+func (c *Client) FindPersonneMoraleByPersonneID(ctx context.Context, personneID int64) (*domain.PersonneMorale, error) {
+	var rows []personneMoraleRow
+	path := fmt.Sprintf("/personne_morale?select=*&personne_id=eq.%d&limit=1", personneID)
+	if err := c.do(ctx, http.MethodGet, path, nil, &rows); err != nil {
+		return nil, fmt.Errorf("repository: recherche personne_morale par personne_id=%d: %w", personneID, err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return rows[0].toDomain(), nil
+}

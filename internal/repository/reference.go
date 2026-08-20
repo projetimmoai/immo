@@ -29,10 +29,27 @@ func (c *Client) lookupReferenceID(ctx context.Context, table, description strin
 	return rows[0].ID, nil
 }
 
-// CategorieEmailID retrouve l'ID de categorie_email pour la description
-// donnée (voir les constantes domain.CategorieEmail*).
-func (c *Client) CategorieEmailID(ctx context.Context, description string) (int64, error) {
-	return c.lookupReferenceID(ctx, "categorie_email", description)
+// ActionID retrouve l'ID de action pour la description donnée (voir les
+// constantes domain.Action*).
+func (c *Client) ActionID(ctx context.Context, description string) (int64, error) {
+	return c.lookupReferenceID(ctx, "action", description)
+}
+
+// SousActionID retrouve l'ID de sous_action pour une Action et une
+// description données. Une sous_action est scoped à son Action parente (sa
+// description n'est unique que parmi les sous_action de cette Action), d'où
+// une recherche dédiée plutôt que lookupReferenceID (qui ne filtre que sur
+// la description).
+func (c *Client) SousActionID(ctx context.Context, actionID int64, description string) (int64, error) {
+	var rows []referenceRow
+	path := fmt.Sprintf("/sous_action?select=id,description&action_id=eq.%d&description=eq.%s&limit=1", actionID, escapeFilterValue(description))
+	if err := c.do(ctx, http.MethodGet, path, nil, &rows); err != nil {
+		return 0, fmt.Errorf("repository: recherche sous_action.description=%q pour action_id=%d: %w", description, actionID, err)
+	}
+	if len(rows) == 0 {
+		return 0, fmt.Errorf("repository: aucune ligne dans sous_action avec action_id=%d et description=%q", actionID, description)
+	}
+	return rows[0].ID, nil
 }
 
 // EmailStatutTraitementID retrouve l'ID de email_statut_traitement pour la

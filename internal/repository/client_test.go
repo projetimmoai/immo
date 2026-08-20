@@ -34,7 +34,7 @@ func TestLookupReferenceID(t *testing.T) {
 		lookup      func(context.Context, string) (int64, error)
 		description string
 	}{
-		{"categorie_email", c.CategorieEmailID, domain.CategorieEmailSinistre},
+		{"action", c.ActionID, domain.ActionSinistre},
 		{"email_statut_traitement", c.EmailStatutTraitementID, domain.EmailStatutNouveau},
 		{"incident_statut", c.IncidentStatutID, domain.IncidentStatutNouveau},
 		{"niveau_urgence", c.NiveauUrgenceID, domain.NiveauUrgenceFaible},
@@ -53,10 +53,19 @@ func TestLookupReferenceID(t *testing.T) {
 	}
 
 	t.Run("description inconnue", func(t *testing.T) {
-		if _, err := c.CategorieEmailID(ctx, "ne-devrait-pas-exister"); err == nil {
+		if _, err := c.ActionID(ctx, "ne-devrait-pas-exister"); err == nil {
 			t.Fatal("attendu une erreur pour une description inconnue, obtenu nil")
 		}
 	})
+}
+
+func TestSousActionIDInconnue(t *testing.T) {
+	c := newTestClient(t)
+	ctx := context.Background()
+
+	if _, err := c.SousActionID(ctx, 0, "ne-devrait-pas-exister"); err == nil {
+		t.Fatal("attendu une erreur pour une sous_action inconnue, obtenu nil")
+	}
 }
 
 func TestInsertEmailAndFind(t *testing.T) {
