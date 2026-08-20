@@ -39,6 +39,7 @@ func TestLookupReferenceID(t *testing.T) {
 		{"incident_statut", c.IncidentStatutID, domain.IncidentStatutNouveau},
 		{"niveau_urgence", c.NiveauUrgenceID, domain.NiveauUrgenceFaible},
 		{"sinistre_statut", c.SinistreStatutID, domain.SinistreStatutDeclare},
+		{"log_type", c.LogTypeID, domain.LogTypeCoproprieteNonIdentifiee},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

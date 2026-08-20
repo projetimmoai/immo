@@ -90,3 +90,9 @@ func (c *Client) NiveauUrgenceID(ctx context.Context, description string) (int64
 func (c *Client) SinistreStatutID(ctx context.Context, description string) (int64, error) {
 	return c.lookupReferenceID(ctx, "sinistre_statut", description)
 }
+
+// LogTypeID retrouve l'ID de log_type pour la description donnée (voir les
+// constantes domain.LogType*).
+func (c *Client) LogTypeID(ctx context.Context, description string) (int64, error) {
+	return c.lookupReferenceID(ctx, "log_type", description)
+}

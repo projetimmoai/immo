@@ -3,10 +3,17 @@ package email
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/projetimmoai/immo/internal/claudeapi"
 	"github.com/projetimmoai/immo/internal/domain"
 )
+
+// confianceMinimaleCopropriete est le seuil en dessous duquel une
+// détermination de copropriété est considérée comme un échec
+// d'identification (et consignée dans log, cf. DetermineCopropriete),
+// même quand une copropriete_id a été retournée.
+const confianceMinimaleCopropriete = 0.8
 
 // ResolutionCopropriete est le résultat de la détermination de la
 // copropriété concernée par un e-mail. CoproprieteID est nil quand la
@@ -27,6 +34,14 @@ type coproprieteDecideur interface {
 	DecideCopropriete(ctx context.Context, candidats []domain.CandidatCopropriete, objet, corpsTexte string) (claudeapi.DecisionCopropriete, error)
 }
 
+// coproprieteLogRepo est la portion de repository.Client utilisée ici pour
+// consigner les échecs d'identification — une interface étroite pour
+// pouvoir tester avec un faux (cf. copropriete_test.go).
+type coproprieteLogRepo interface {
+	LogTypeID(ctx context.Context, description string) (int64, error)
+	InsertLog(ctx context.Context, l *domain.Log) (*domain.Log, error)
+}
+
 // DetermineCopropriete détermine à quelle copropriété un e-mail se
 // rapporte, à partir du Contexte de son expéditeur déjà enrichi (cf.
 // EnrichirExpediteur) et du contenu du message.
@@ -37,20 +52,28 @@ type coproprieteDecideur interface {
 // déterminer (1) sous quel rôle l'e-mail semble avoir été envoyé, et (2)
 // laquelle des coproprietes associées à ce rôle correspond, avec un indice
 // de confiance.
-func DetermineCopropriete(ctx context.Context, claude coproprieteDecideur, ec *Contexte, objet, corpsTexte string) (ResolutionCopropriete, error) {
+//
+// Expéditeur connu mais confiance finale < confianceMinimaleCopropriete
+// (identification impossible ou trop incertaine) : un évènement
+// domain.LogTypeCoproprieteNonIdentifiee est consigné via repo (cf.
+// logEchecIdentification). Un échec de journalisation ne fait pas échouer
+// la détermination elle-même — seulement loggé sur stderr (log.Printf).
+func DetermineCopropriete(ctx context.Context, claude coproprieteDecideur, repo coproprieteLogRepo, ec *Contexte, objet, corpsTexte string) (ResolutionCopropriete, error) {
 	if ec == nil || !ec.Connu {
 		return ResolutionCopropriete{Raison: "expéditeur inconnu : rien à déterminer"}, nil
 	}
 
 	candidats := candidatsCoproprietes(ec)
+	var res ResolutionCopropriete
+	var err error
 
 	switch len(candidats) {
 	case 0:
-		return ResolutionCopropriete{Raison: "aucune copropriété associée à l'expéditeur"}, nil
+		res = ResolutionCopropriete{Raison: "aucune copropriété associée à l'expéditeur"}
 
 	case 1:
 		c := candidats[0]
-		res := ResolutionCopropriete{
+		res = ResolutionCopropriete{
 			CoproprieteID:        &c.CoproprieteID,
 			CoproprieteReference: c.CoproprieteReference,
 			Confiance:            1,
@@ -59,10 +82,37 @@ func DetermineCopropriete(ctx context.Context, claude coproprieteDecideur, ec *C
 		if len(c.Roles) == 1 {
 			res.Role = &c.Roles[0]
 		}
-		return res, nil
 
 	default:
-		return determinerViaClaude(ctx, claude, candidats, objet, corpsTexte)
+		res, err = determinerViaClaude(ctx, claude, candidats, objet, corpsTexte)
+	}
+	if err != nil {
+		return ResolutionCopropriete{}, err
+	}
+
+	if res.Confiance < confianceMinimaleCopropriete {
+		logEchecIdentification(ctx, repo, ec, res)
+	}
+	return res, nil
+}
+
+// logEchecIdentification consigne un évènement
+// domain.LogTypeCoproprieteNonIdentifiee. N'importe quel échec de
+// journalisation est seulement loggé sur stderr — ne doit jamais faire
+// échouer DetermineCopropriete, dont le résultat métier est déjà acquis.
+func logEchecIdentification(ctx context.Context, repo coproprieteLogRepo, ec *Contexte, res ResolutionCopropriete) {
+	if repo == nil || ec.Personne == nil {
+		return
+	}
+	logTypeID, err := repo.LogTypeID(ctx, domain.LogTypeCoproprieteNonIdentifiee)
+	if err != nil {
+		log.Printf("email: consignation copropriete_non_identifiee (personne id=%d): recherche du log_type: %v", ec.Personne.ID, err)
+		return
+	}
+	message := fmt.Sprintf("confiance=%.2f (seuil=%.2f) : %s", res.Confiance, confianceMinimaleCopropriete, res.Raison)
+	personneID := ec.Personne.ID
+	if _, err := repo.InsertLog(ctx, &domain.Log{LogTypeID: logTypeID, Message: &message, PersonneID: &personneID, CoproprieteID: res.CoproprieteID}); err != nil {
+		log.Printf("email: consignation copropriete_non_identifiee (personne id=%d): %v", ec.Personne.ID, err)
 	}
 }
 
