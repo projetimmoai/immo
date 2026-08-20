@@ -28,6 +28,8 @@ type Copropriete struct {
 	IBAN                              *string
 	BIC                               *string
 	MisAJour                          *time.Time
+	CreePar                           *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
+	Reference                         string // référence lisible (ex: "COP1"), générée par la base (DEFAULT), jamais fournie à l'insertion
 }
 
 // Batiment est un bâtiment physique appartenant à une Copropriete.
@@ -43,6 +45,7 @@ type Batiment struct {
 	Nom               *string
 	AdresseRegion     *string
 	CoproprieteID     *int64 // FK -> copropriete.id
+	CreePar           *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
 }
 
 // Lot est un lot de copropriété (appartement, cave, parking...) au sein d'un Batiment.
@@ -57,6 +60,8 @@ type Lot struct {
 	EstSecondaire *bool
 	Numero        *string
 	EstActif      *bool
+	CreePar       *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
+	Reference     string // référence lisible (ex: "LOT1"), générée par la base (DEFAULT), jamais fournie à l'insertion
 }
 
 // LotDesignation est une table de référence (type de lot : appartement, cave, parking...).
@@ -78,6 +83,7 @@ type LotPersonneMap struct {
 	Fin             *time.Time // date
 	EstProprietaire *bool
 	EstGestionnaire *bool
+	CreePar         *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
 }
 
 // CoproprieteCollaborateurMap relie une Copropriete à une Personne collaborateur
@@ -87,4 +93,5 @@ type CoproprieteCollaborateurMap struct {
 	CreatedAt     time.Time
 	CoproprieteID *int64 // FK -> copropriete.id
 	PersonneID    *int64 // FK -> personne.id
+	CreePar       *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
 }

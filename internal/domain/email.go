@@ -57,13 +57,14 @@ type Email struct {
 	ErreurTraitement     *string
 }
 
-// EmailPieceJointe est une pièce jointe d'un Email, stockée sur Google Drive.
+// EmailPieceJointe est une pièce jointe d'un Email, stockée dans un service
+// externe (Google Drive ou autre) et référencée ici par son URL.
 type EmailPieceJointe struct {
-	ID                int64
-	CreatedAt         time.Time
-	EmailID           int64
-	NomFichier        string
-	TypeMime          *string
-	TailleOctets      *int64
-	GoogleDriveFileID *string
+	ID           int64
+	CreatedAt    time.Time
+	EmailID      int64
+	NomFichier   string
+	TypeMime     *string
+	TailleOctets *int64
+	URL          *string
 }

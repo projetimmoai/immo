@@ -40,4 +40,6 @@ type Sinistre struct {
 	MontantIndemniseCentimes *int32
 	StatutID                 int64  // FK -> sinistre_statut.id, NOT NULL : à fixer explicitement à l'insertion
 	AssigneA                 *int64 // FK -> personne.id (collaborateur en charge)
+	CreePar                  *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
+	Reference                string // référence lisible (ex: "SIN1"), générée par la base (DEFAULT), jamais fournie à l'insertion
 }

@@ -59,4 +59,6 @@ type Incident struct {
 	DateDeclaration     time.Time
 	DateResolution      *time.Time
 	AssigneA            *int64 // FK -> personne.id (collaborateur en charge)
+	CreePar             *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
+	Reference           string // référence lisible (ex: "INC1"), générée par la base (DEFAULT), jamais fournie à l'insertion
 }

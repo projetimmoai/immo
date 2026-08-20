@@ -16,6 +16,7 @@ type Contrat struct {
 	DureeMois          *int64
 	TaciteReconduction *bool
 	PreavisJours       *int64
+	CreePar            *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
 }
 
 // ContratType est une table de référence (assurance, entretien ascenseur, ménage...).
@@ -47,6 +48,7 @@ type ExerciceComptable struct {
 	CloturePar          *int64     // FK -> personne.id
 	AgApprobationID     *int64     // référence une assemblée générale (pas de table dédiée pour l'instant)
 	StatutApprobationID int64      // FK -> exercice_comptable_statut_approbation.id, NOT NULL : à fixer explicitement à l'insertion (pas de DEFAULT en base)
+	CreePar             *int64     // FK -> personne.id (gestionnaire à l'origine de la création)
 }
 
 // Valeurs connues de exercice_comptable_statut.description (provisoires, à

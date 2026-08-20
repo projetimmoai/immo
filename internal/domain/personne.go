@@ -18,10 +18,11 @@ type Personne struct {
 	AdressePaysCode   *string
 	Email             *string
 	EstPhysique       *bool
-	Reference         *string
+	Reference         string // référence lisible (ex: "PER1"), générée par la base (DEFAULT), jamais fournie à l'insertion
 	IBAN              *string
 	BIC               *string
 	EstCollaborateur  *bool
+	CreePar           *int64 // FK -> personne.id (gestionnaire à l'origine de la création ; auto-référence)
 }
 
 // PersonnePhysique complète une Personne quand EstPhysique est vrai.
