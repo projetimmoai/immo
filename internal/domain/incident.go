@@ -18,9 +18,9 @@ const (
 	NiveauUrgenceCritique = "critique"
 )
 
-// Dysfonctionnement est un catalogue de types de pannes/incidents techniques
+// IncidentType est un catalogue de types de pannes/incidents techniques
 // (fuite, panne d'ascenseur, panne d'interphone...).
-type Dysfonctionnement struct {
+type IncidentType struct {
 	ID          int64
 	CreatedAt   time.Time
 	Description *string
@@ -46,19 +46,19 @@ type NiveauUrgence struct {
 // Incident est une instance de panne/dysfonctionnement technique signalée,
 // rattachée à une Copropriete et éventuellement à un Lot précis.
 type Incident struct {
-	ID                  int64
-	CreatedAt           time.Time
-	DysfonctionnementID *int64 // FK -> dysfonctionnement.id
-	EmailOrigineID      *int64 // FK -> email.id, si déclenché par un e-mail
-	CoproprieteID       int64  // FK -> copropriete.id, NOT NULL
-	LotID               *int64 // FK -> lot.id, nul = partie commune
-	DeclarantID         *int64 // FK -> personne.id
-	Description         *string
-	UrgenceID           *int64 // FK -> niveau_urgence.id
-	StatutID            int64  // FK -> incident_statut.id, NOT NULL : à fixer explicitement à l'insertion
-	DateDeclaration     time.Time
-	DateResolution      *time.Time
-	AssigneA            *int64 // FK -> personne.id (collaborateur en charge)
-	CreePar             *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
-	Reference           string // référence lisible (ex: "INC1"), générée par la base (DEFAULT), jamais fournie à l'insertion
+	ID              int64
+	CreatedAt       time.Time
+	IncidentTypeID  *int64 // FK -> incident_type.id
+	EmailOrigineID  *int64 // FK -> email.id, si déclenché par un e-mail
+	CoproprieteID   int64  // FK -> copropriete.id, NOT NULL
+	LotID           *int64 // FK -> lot.id, nul = partie commune
+	DeclarantID     *int64 // FK -> personne.id
+	Description     *string
+	UrgenceID       *int64 // FK -> niveau_urgence.id
+	StatutID        int64  // FK -> incident_statut.id, NOT NULL : à fixer explicitement à l'insertion
+	DateDeclaration time.Time
+	DateResolution  *time.Time
+	AssigneA        *int64 // FK -> personne.id (collaborateur en charge)
+	CreePar         *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
+	Reference       string // référence lisible (ex: "INC1"), générée par la base (DEFAULT), jamais fournie à l'insertion
 }
