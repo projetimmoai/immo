@@ -6,11 +6,16 @@ import "time"
 // tables de référence éditables en base : ces constantes servent de clés de
 // recherche (par description), jamais d'ID en dur.
 const (
-	ActionSinistre          = "sinistre"
-	ActionIncident          = "incident"
-	ActionAssembleeGenerale = "assemblee_generale"
-	ActionAutre             = "autre"
-	ActionIndetermine       = "indetermine"
+	ActionSinistre              = "sinistre"
+	ActionIncident              = "incident"
+	ActionAssembleeGenerale     = "assemblee_generale"
+	ActionAutre                 = "autre"
+	ActionComptabilite          = "comptabilite"
+	ActionMutation              = "mutation"
+	ActionContentieux           = "contentieux"
+	ActionTravaux               = "travaux"
+	ActionControleGestion       = "controle_gestion"
+	ActionDemandeAdministrative = "demande_administrative"
 )
 
 // Valeurs connues de email_statut_traitement.description.

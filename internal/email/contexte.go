@@ -160,15 +160,14 @@ func coproprietesDeLots(lots []repository.LotAssocie) []repository.CoproprieteAs
 }
 
 // TraiterMessage enrichit le contexte de l'expéditeur d'un Message Gmail
-// normalisé (internal/gmailapi) et décide de son routage (cf. DecideRoute),
-// en une seule étape. Ne modifie rien en base ni ailleurs : c'est au code
-// appelant (worker, à venir) de décider quoi faire du résultat (créer un
-// incident, un sinistre, l'ignorer...).
-func TraiterMessage(ctx context.Context, repo contexteRepo, msg *gmailapi.Message) (*Contexte, Decision, error) {
-	contexte, err := EnrichirExpediteur(ctx, repo, msg.From)
-	if err != nil {
-		return nil, Decision{}, err
-	}
-	decision := DecideRoute(contexte, msg.Subject, msg.BodyText)
-	return contexte, decision, nil
+// normalisé (internal/gmailapi). Ne modifie rien en base ni ailleurs.
+//
+// Ne va pas plus loin (détermination de la copropriété, puis routage) :
+// ces étapes suivantes ont chacune leurs propres dépendances (client
+// Claude dédié, liste des actions, dépôt pour la journalisation) qui ne se
+// prêtent pas à un simple enchaînement ici — c'est au code appelant
+// (worker, à venir) d'orchestrer DetermineCopropriete puis, si la
+// copropriété est identifiée (NouveauContexteRoutage), RouterEmail.
+func TraiterMessage(ctx context.Context, repo contexteRepo, msg *gmailapi.Message) (*Contexte, error) {
+	return EnrichirExpediteur(ctx, repo, msg.From)
 }
