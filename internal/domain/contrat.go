@@ -5,25 +5,18 @@ import "time"
 // Contrat est un contrat souscrit par une Copropriete auprès d'une entreprise
 // (ascensoriste, assureur, syndic tiers...).
 type Contrat struct {
-	ID                 int64
-	CreatedAt          time.Time
-	CoproprieteID      *int64 // FK -> copropriete.id
-	ContratTypeID      *int64 // FK -> contrat_type.id
-	EntrepriseID       *int64 // FK -> personne.id (personne_morale fournisseur)
-	NumeroContrat      *string
-	DateDebut          *time.Time // date
-	DateFin            *time.Time // date
-	DureeMois          *int64
-	TaciteReconduction *bool
-	PreavisJours       *int64
-	CreePar            *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
-}
-
-// ContratType est une table de référence (assurance, entretien ascenseur, ménage...).
-type ContratType struct {
-	ID          int64
-	CreatedAt   time.Time
-	Description *string
+	ID                   int64
+	CreatedAt            time.Time
+	CoproprieteID        *int64 // FK -> copropriete.id
+	CategorieTechniqueID *int64 // FK -> categorie_technique.id (catalogue partagé avec Incident, cf. domain.CategorieTechnique)
+	EntrepriseID         *int64 // FK -> personne.id (personne_morale fournisseur)
+	NumeroContrat        *string
+	DateDebut            *time.Time // date
+	DateFin              *time.Time // date
+	DureeMois            *int64
+	TaciteReconduction   *bool
+	PreavisJours         *int64
+	CreePar              *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
 }
 
 // FrequenceID est une table de référence pour les fréquences (mensuelle,

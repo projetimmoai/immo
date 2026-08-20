@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/projetimmoai/immo/internal/domain"
+	"github.com/projetimmoai/immo/internal/repository"
 )
 
 func TestDecideRouteExpediteurInconnu(t *testing.T) {
@@ -50,7 +51,8 @@ func TestDecideRouteFournisseurSansMotCle(t *testing.T) {
 		Connu:          true,
 		Personne:       &domain.Personne{ID: 2},
 		PersonneMorale: &domain.PersonneMorale{ID: 20, EstFournisseur: &vrai},
-		Contrats:       []*domain.Contrat{{ID: 200}},
+		Roles:          []domain.Role{domain.RoleFournisseur},
+		Contrats:       []repository.ContratAssocie{{ContratID: 200}},
 	}
 	d := DecideRoute(ctx, "Bonjour", "Merci de votre confiance")
 	if d.Action != domain.ActionAutre {

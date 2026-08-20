@@ -55,7 +55,7 @@ func DecideRoute(ctx *Contexte, objet, corpsTexte string) Decision {
 		}
 	}
 
-	if ctx.PersonneMorale != nil && ctx.PersonneMorale.EstFournisseur != nil && *ctx.PersonneMorale.EstFournisseur && len(ctx.Contrats) > 0 {
+	if ctx.ARole(domain.RoleFournisseur) && len(ctx.Contrats) > 0 {
 		return Decision{
 			Action: domain.ActionAutre,
 			Raison: fmt.Sprintf("expéditeur fournisseur connu (%d contrat(s)), mais aucun mot-clé d'action détecté", len(ctx.Contrats)),

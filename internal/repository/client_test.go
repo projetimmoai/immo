@@ -63,8 +63,13 @@ func TestSousActionIDInconnue(t *testing.T) {
 	c := newTestClient(t)
 	ctx := context.Background()
 
-	if _, err := c.SousActionID(ctx, 0, "ne-devrait-pas-exister"); err == nil {
-		t.Fatal("attendu une erreur pour une sous_action inconnue, obtenu nil")
+	if _, err := c.SousActionID(ctx, 0, nil, "ne-devrait-pas-exister"); err == nil {
+		t.Fatal("attendu une erreur pour une sous_action de premier niveau inconnue, obtenu nil")
+	}
+
+	parentID := int64(0)
+	if _, err := c.SousActionID(ctx, 0, &parentID, "ne-devrait-pas-exister"); err == nil {
+		t.Fatal("attendu une erreur pour une sous_action imbriquée inconnue, obtenu nil")
 	}
 }
 

@@ -31,13 +31,20 @@ type Action struct {
 }
 
 // SousAction est une sous-catégorie d'une Action (ex: "degat_des_eaux" sous
-// "sinistre"), scoped à son Action parente : sa Description n'est unique que
-// parmi les sous_action d'une même Action (contrainte UNIQUE(action_id, description)).
+// "sinistre"), pouvant elle-même avoir des sous-sous-actions : une
+// hiérarchie récursive de profondeur arbitraire. ActionID identifie
+// toujours l'Action racine de la hiérarchie (dénormalisé, valable à
+// n'importe quelle profondeur) ; ParentID est nul pour une sous_action de
+// premier niveau (directement sous l'Action), et pointe sinon vers sa
+// sous_action parente. La Description n'est unique que parmi les
+// sous_action partageant le même (ActionID, ParentID) — cf. contrainte
+// UNIQUE NULLS NOT DISTINCT en base.
 type SousAction struct {
 	ID          int64
 	CreatedAt   time.Time
 	Description string
-	ActionID    int64 // FK -> action.id
+	ActionID    int64  // FK -> action.id (action racine, à toute profondeur)
+	ParentID    *int64 // FK -> sous_action.id, nul si sous_action de premier niveau
 }
 
 // EmailStatutTraitement est une table de référence pour le statut de

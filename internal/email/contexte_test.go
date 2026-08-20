@@ -9,11 +9,12 @@ import (
 )
 
 type fakeRepo struct {
-	personnes         map[string]*domain.Personne // par email
-	personnesPhysique map[int64]*domain.PersonnePhysique
-	personnesMorale   map[int64]*domain.PersonneMorale
-	lots              map[int64][]repository.LotAssocie
-	contrats          map[int64][]*domain.Contrat
+	personnes          map[string]*domain.Personne // par email
+	personnesPhysique  map[int64]*domain.PersonnePhysique
+	personnesMorale    map[int64]*domain.PersonneMorale
+	lots               map[int64][]repository.LotAssocie
+	contrats           map[int64][]repository.ContratAssocie
+	coproprietesGerees map[int64][]repository.CoproprieteAssociee
 }
 
 func (f *fakeRepo) FindPersonneByEmail(_ context.Context, email string) (*domain.Personne, error) {
@@ -32,8 +33,12 @@ func (f *fakeRepo) ListLotsParPersonne(_ context.Context, personneID int64) ([]r
 	return f.lots[personneID], nil
 }
 
-func (f *fakeRepo) ListContratsParFournisseur(_ context.Context, entrepriseID int64) ([]*domain.Contrat, error) {
+func (f *fakeRepo) ListContratsParFournisseur(_ context.Context, entrepriseID int64) ([]repository.ContratAssocie, error) {
 	return f.contrats[entrepriseID], nil
+}
+
+func (f *fakeRepo) ListCoproprietesParGestionnaire(_ context.Context, personneID int64) ([]repository.CoproprieteAssociee, error) {
+	return f.coproprietesGerees[personneID], nil
 }
 
 func TestEnrichirExpediteurInconnu(t *testing.T) {
@@ -46,14 +51,17 @@ func TestEnrichirExpediteurInconnu(t *testing.T) {
 	if ctx.Connu {
 		t.Fatalf("attendu Connu=false, obtenu %+v", ctx)
 	}
+	if len(ctx.Roles) != 0 {
+		t.Errorf("Roles = %+v, attendu vide", ctx.Roles)
+	}
 }
 
-func TestEnrichirExpediteurPersonnePhysiqueAvecLots(t *testing.T) {
+func TestEnrichirExpediteurOccupantEtClient(t *testing.T) {
 	vrai := true
 	nom := "Dupont"
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
-			"jean@example.com": {ID: 1, EstPhysique: &vrai, Reference: "PER1"},
+			"jean@example.com": {ID: 1, EstPhysique: &vrai, EstOccupant: &vrai, EstClient: &vrai, Reference: "PER1"},
 		},
 		personnesPhysique: map[int64]*domain.PersonnePhysique{
 			1: {ID: 10, Nom: &nom},
@@ -70,15 +78,58 @@ func TestEnrichirExpediteurPersonnePhysiqueAvecLots(t *testing.T) {
 	if !ctx.Connu {
 		t.Fatal("attendu Connu=true")
 	}
+	if !ctx.ARole(domain.RoleOccupant) || !ctx.ARole(domain.RoleClient) {
+		t.Errorf("Roles = %+v, attendu occupant ET client", ctx.Roles)
+	}
+	if ctx.ARole(domain.RoleFournisseur) || ctx.ARole(domain.RoleGestionnaire) {
+		t.Errorf("Roles = %+v, attendu ni fournisseur ni gestionnaire", ctx.Roles)
+	}
 	if ctx.PersonnePhysique == nil || ctx.PersonnePhysique.ID != 10 {
 		t.Errorf("PersonnePhysique = %+v", ctx.PersonnePhysique)
 	}
 	if len(ctx.Lots) != 1 || ctx.Lots[0].LotReference != "LOT1" {
 		t.Errorf("Lots = %+v", ctx.Lots)
 	}
+	if len(ctx.Coproprietes) != 1 || ctx.Coproprietes[0].CoproprieteReference != "COP1" {
+		t.Errorf("Coproprietes = %+v", ctx.Coproprietes)
+	}
+	// Ni fournisseur ni gestionnaire : pas d'appel réseau inutile attendu.
+	if ctx.Contrats != nil {
+		t.Errorf("Contrats = %+v, attendu nil (pas fournisseur)", ctx.Contrats)
+	}
+	if ctx.CoproprietesGestion != nil {
+		t.Errorf("CoproprietesGestion = %+v, attendu nil (pas gestionnaire)", ctx.CoproprietesGestion)
+	}
 }
 
-func TestEnrichirExpediteurPersonneMoraleFournisseurAvecContrats(t *testing.T) {
+func TestEnrichirExpediteurCoproprietesDedupliquees(t *testing.T) {
+	vrai := true
+	repo := &fakeRepo{
+		personnes: map[string]*domain.Personne{
+			"proprio@example.com": {ID: 6, EstPhysique: &vrai, EstClient: &vrai, Reference: "PER6"},
+		},
+		lots: map[int64][]repository.LotAssocie{
+			6: {
+				{LotID: 100, LotReference: "LOT1", CoproprieteID: 1, CoproprieteReference: "COP1", EstProprietaire: &vrai},
+				{LotID: 101, LotReference: "LOT2", CoproprieteID: 1, CoproprieteReference: "COP1", EstProprietaire: &vrai},
+				{LotID: 200, LotReference: "LOT3", CoproprieteID: 2, CoproprieteReference: "COP2", EstProprietaire: &vrai},
+			},
+		},
+	}
+
+	ctx, err := EnrichirExpediteur(context.Background(), repo, "proprio@example.com")
+	if err != nil {
+		t.Fatalf("EnrichirExpediteur: %v", err)
+	}
+	if len(ctx.Lots) != 3 {
+		t.Fatalf("Lots = %+v, attendu 3 (pas de déduplication sur les lots)", ctx.Lots)
+	}
+	if len(ctx.Coproprietes) != 2 {
+		t.Fatalf("Coproprietes = %+v, attendu 2 (dédupliquées : COP1 x2 lots -> 1 entrée)", ctx.Coproprietes)
+	}
+}
+
+func TestEnrichirExpediteurFournisseurAvecContrats(t *testing.T) {
 	faux := false
 	vrai := true
 	repo := &fakeRepo{
@@ -88,8 +139,8 @@ func TestEnrichirExpediteurPersonneMoraleFournisseurAvecContrats(t *testing.T) {
 		personnesMorale: map[int64]*domain.PersonneMorale{
 			2: {ID: 20, EstFournisseur: &vrai},
 		},
-		contrats: map[int64][]*domain.Contrat{
-			2: {{ID: 200, NumeroContrat: strPtr("CTR-1")}},
+		contrats: map[int64][]repository.ContratAssocie{
+			2: {{ContratID: 200, NumeroContrat: strPtr("CTR-1"), CoproprieteID: 1, CoproprieteReference: "COP1"}},
 		},
 	}
 
@@ -97,25 +148,81 @@ func TestEnrichirExpediteurPersonneMoraleFournisseurAvecContrats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnrichirExpediteur: %v", err)
 	}
+	if !ctx.ARole(domain.RoleFournisseur) {
+		t.Errorf("Roles = %+v, attendu fournisseur", ctx.Roles)
+	}
 	if ctx.PersonneMorale == nil || ctx.PersonneMorale.ID != 20 {
 		t.Errorf("PersonneMorale = %+v", ctx.PersonneMorale)
 	}
-	if len(ctx.Contrats) != 1 || ctx.Contrats[0].ID != 200 {
+	if len(ctx.Contrats) != 1 || ctx.Contrats[0].ContratID != 200 {
 		t.Errorf("Contrats = %+v", ctx.Contrats)
+	}
+	if ctx.Lots != nil {
+		t.Errorf("Lots = %+v, attendu nil (ni occupant ni client)", ctx.Lots)
 	}
 }
 
-func TestEnrichirExpediteurPersonneMoraleNonFournisseurSansContrats(t *testing.T) {
+func TestEnrichirExpediteurGestionnaireAvecCoproprietes(t *testing.T) {
+	vrai := true
+	nom := "Martin"
+	nomCop := "Residence Horizon"
+	repo := &fakeRepo{
+		personnes: map[string]*domain.Personne{
+			"martin@cabinet.example": {ID: 3, EstPhysique: &vrai, EstGestionnaire: &vrai, Reference: "PER3"},
+		},
+		personnesPhysique: map[int64]*domain.PersonnePhysique{
+			3: {ID: 30, Nom: &nom},
+		},
+		coproprietesGerees: map[int64][]repository.CoproprieteAssociee{
+			3: {{CoproprieteID: 1, CoproprieteNom: &nomCop, CoproprieteReference: "COP1"}},
+		},
+	}
+
+	ctx, err := EnrichirExpediteur(context.Background(), repo, "martin@cabinet.example")
+	if err != nil {
+		t.Fatalf("EnrichirExpediteur: %v", err)
+	}
+	if !ctx.ARole(domain.RoleGestionnaire) {
+		t.Errorf("Roles = %+v, attendu gestionnaire", ctx.Roles)
+	}
+	if len(ctx.CoproprietesGestion) != 1 || ctx.CoproprietesGestion[0].CoproprieteReference != "COP1" {
+		t.Errorf("CoproprietesGestion = %+v", ctx.CoproprietesGestion)
+	}
+}
+
+func TestEnrichirExpediteurPlusieursRoles(t *testing.T) {
+	vrai := true
+	repo := &fakeRepo{
+		personnes: map[string]*domain.Personne{
+			"multi@example.com": {
+				ID: 4, EstPhysique: &vrai,
+				EstOccupant: &vrai, EstClient: &vrai, EstGestionnaire: &vrai,
+			},
+		},
+	}
+
+	ctx, err := EnrichirExpediteur(context.Background(), repo, "multi@example.com")
+	if err != nil {
+		t.Fatalf("EnrichirExpediteur: %v", err)
+	}
+	for _, r := range []domain.Role{domain.RoleOccupant, domain.RoleClient, domain.RoleGestionnaire} {
+		if !ctx.ARole(r) {
+			t.Errorf("Roles = %+v, attendu %q parmi les rôles cumulés", ctx.Roles, r)
+		}
+	}
+	if ctx.ARole(domain.RoleFournisseur) {
+		t.Errorf("Roles = %+v, attendu pas fournisseur (personne physique)", ctx.Roles)
+	}
+}
+
+func TestEnrichirExpediteurConnuSansRole(t *testing.T) {
 	faux := false
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
-			"syndic@copro.example": {ID: 3, EstPhysique: &faux, Reference: "PER3"},
+			"syndic@copro.example": {ID: 5, EstPhysique: &faux, Reference: "PER5"},
 		},
 		personnesMorale: map[int64]*domain.PersonneMorale{
-			3: {ID: 30, EstFournisseur: &faux},
-		},
-		contrats: map[int64][]*domain.Contrat{
-			3: {{ID: 999}}, // ne devrait jamais être consulté (EstFournisseur=false)
+			5: {ID: 50, EstFournisseur: &faux},
 		},
 	}
 
@@ -123,8 +230,11 @@ func TestEnrichirExpediteurPersonneMoraleNonFournisseurSansContrats(t *testing.T
 	if err != nil {
 		t.Fatalf("EnrichirExpediteur: %v", err)
 	}
-	if ctx.Contrats != nil {
-		t.Errorf("Contrats = %+v, attendu nil (pas fournisseur, ListContratsParFournisseur ne doit pas être appelé)", ctx.Contrats)
+	if len(ctx.Roles) != 0 {
+		t.Errorf("Roles = %+v, attendu vide", ctx.Roles)
+	}
+	if ctx.Contrats != nil || ctx.Lots != nil || ctx.CoproprietesGestion != nil {
+		t.Errorf("attendu aucun appel complémentaire sans rôle : Contrats=%+v Lots=%+v CoproprietesGestion=%+v", ctx.Contrats, ctx.Lots, ctx.CoproprietesGestion)
 	}
 }
 

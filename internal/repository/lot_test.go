@@ -56,3 +56,16 @@ func TestFindPersonneMoraleByPersonneIDInconnue(t *testing.T) {
 		t.Fatalf("FindPersonneMoraleByPersonneID: attendu nil, obtenu %+v", pm)
 	}
 }
+
+func TestListCoproprietesParGestionnaireInconnu(t *testing.T) {
+	c := newTestClient(t)
+	ctx := context.Background()
+
+	coproprietes, err := c.ListCoproprietesParGestionnaire(ctx, 0)
+	if err != nil {
+		t.Fatalf("ListCoproprietesParGestionnaire: %v", err)
+	}
+	if len(coproprietes) != 0 {
+		t.Fatalf("ListCoproprietesParGestionnaire: attendu aucune copropriete pour personne_id=0, obtenu %+v", coproprietes)
+	}
+}
