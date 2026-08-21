@@ -68,10 +68,10 @@ func TestDetermineCoproprieteAucunCandidat(t *testing.T) {
 	}
 }
 
-func TestDetermineCoproprieteUnSeulCandidatClient(t *testing.T) {
+func TestDetermineCoproprieteUnSeulCandidatCoproprietaire(t *testing.T) {
 	ec := &Contexte{
 		Connu: true,
-		Roles: []domain.Role{domain.RoleClient},
+		Roles: []domain.Role{domain.RoleCoproprietaire},
 		Coproprietes: []repository.CoproprieteAssociee{
 			{CoproprieteID: 1, CoproprieteReference: "COP1"},
 		},
@@ -87,18 +87,18 @@ func TestDetermineCoproprieteUnSeulCandidatClient(t *testing.T) {
 	if res.Confiance != 1 {
 		t.Errorf("Confiance = %v, attendu 1 (candidat unique)", res.Confiance)
 	}
-	if res.Role == nil || *res.Role != domain.RoleClient {
-		t.Errorf("Role = %v, attendu client (seul rôle du candidat unique)", res.Role)
+	if res.Role == nil || *res.Role != domain.RoleCoproprietaire {
+		t.Errorf("Role = %v, attendu coproprietaire (seul rôle du candidat unique)", res.Role)
 	}
 }
 
 func TestDetermineCoproprieteUnSeulCandidatMultiRoles(t *testing.T) {
-	// Client ET occupant de la même (et unique) copropriete : un seul
+	// Coproprietaire ET occupant de la même (et unique) copropriete : un seul
 	// candidat malgré 2 rôles -> toujours facile, mais Role reste
 	// indéterminé (ambigu entre les 2 rôles du même candidat).
 	ec := &Contexte{
 		Connu: true,
-		Roles: []domain.Role{domain.RoleClient, domain.RoleOccupant},
+		Roles: []domain.Role{domain.RoleCoproprietaire, domain.RoleOccupant},
 		Coproprietes: []repository.CoproprieteAssociee{
 			{CoproprieteID: 1, CoproprieteReference: "COP1"},
 		},
@@ -303,7 +303,7 @@ func TestCandidatsCoproprieteFusionRoles(t *testing.T) {
 	// seul candidat, avec les 2 rôles cumulés.
 	ec := &Contexte{
 		Connu: true,
-		Roles: []domain.Role{domain.RoleClient, domain.RoleGestionnaire},
+		Roles: []domain.Role{domain.RoleCoproprietaire, domain.RoleGestionnaire},
 		Coproprietes: []repository.CoproprieteAssociee{
 			{CoproprieteID: 1, CoproprieteReference: "COP1"},
 		},
@@ -317,6 +317,6 @@ func TestCandidatsCoproprieteFusionRoles(t *testing.T) {
 		t.Fatalf("candidats = %+v, attendu 1 (même copropriete via 2 sources)", candidats)
 	}
 	if len(candidats[0].Roles) != 2 {
-		t.Errorf("Roles = %+v, attendu client ET gestionnaire cumulés", candidats[0].Roles)
+		t.Errorf("Roles = %+v, attendu coproprietaire ET gestionnaire cumulés", candidats[0].Roles)
 	}
 }

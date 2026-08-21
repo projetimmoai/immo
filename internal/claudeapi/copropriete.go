@@ -53,7 +53,7 @@ func (c *Client) DecideCopropriete(ctx context.Context, candidats []domain.Candi
 			Properties: map[string]any{
 				"role": map[string]any{
 					"type":        "string",
-					"enum":        []string{"occupant", "client", "fournisseur", "gestionnaire", roleIndetermine},
+					"enum":        []string{"occupant", "coproprietaire", "fournisseur", "gestionnaire", roleIndetermine},
 					"description": "Le rôle sous lequel l'e-mail semble avoir été envoyé, ou \"" + roleIndetermine + "\" si indéterminable.",
 				},
 				"copropriete_id": map[string]any{
@@ -81,7 +81,7 @@ func (c *Client) DecideCopropriete(ctx context.Context, candidats []domain.Candi
 			Text: "Tu aides un cabinet de gestion de copropriétés à router ses e-mails entrants. " +
 				"On te donne le contenu d'un e-mail et la liste des copropriétés associées à son " +
 				"expéditeur, chacune avec le ou les rôles sous lesquels cet expéditeur y est connu " +
-				"(occupant, client = copropriétaire, fournisseur = sous contrat, gestionnaire = membre " +
+				"(occupant, coproprietaire, fournisseur = sous contrat, gestionnaire = membre " +
 				"du cabinet en charge). Détermine sous quel rôle cet e-mail semble avoir été envoyé et " +
 				"à quelle copropriété, parmi les candidats fournis, il se rapporte. Si le contenu ne " +
 				"permet pas de trancher avec une confiance raisonnable, retourne null pour " +

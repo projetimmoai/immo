@@ -83,8 +83,8 @@ func TestEnrichirExpediteurOccupantEtClient(t *testing.T) {
 	if !ctx.Connu {
 		t.Fatal("attendu Connu=true")
 	}
-	if !ctx.ARole(domain.RoleOccupant) || !ctx.ARole(domain.RoleClient) {
-		t.Errorf("Roles = %+v, attendu occupant ET client", ctx.Roles)
+	if !ctx.ARole(domain.RoleOccupant) || !ctx.ARole(domain.RoleCoproprietaire) {
+		t.Errorf("Roles = %+v, attendu occupant ET coproprietaire", ctx.Roles)
 	}
 	if ctx.ARole(domain.RoleFournisseur) || ctx.ARole(domain.RoleGestionnaire) {
 		t.Errorf("Roles = %+v, attendu ni fournisseur ni gestionnaire", ctx.Roles)
@@ -163,7 +163,7 @@ func TestEnrichirExpediteurFournisseurAvecContrats(t *testing.T) {
 		t.Errorf("Contrats = %+v", ctx.Contrats)
 	}
 	if ctx.Lots != nil {
-		t.Errorf("Lots = %+v, attendu nil (ni occupant ni client)", ctx.Lots)
+		t.Errorf("Lots = %+v, attendu nil (ni occupant ni coproprietaire)", ctx.Lots)
 	}
 }
 
@@ -210,7 +210,7 @@ func TestEnrichirExpediteurPlusieursRoles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnrichirExpediteur: %v", err)
 	}
-	for _, r := range []domain.Role{domain.RoleOccupant, domain.RoleClient, domain.RoleGestionnaire} {
+	for _, r := range []domain.Role{domain.RoleOccupant, domain.RoleCoproprietaire, domain.RoleGestionnaire} {
 		if !ctx.ARole(r) {
 			t.Errorf("Roles = %+v, attendu %q parmi les rôles cumulés", ctx.Roles, r)
 		}
@@ -259,8 +259,8 @@ func TestEnrichirExpediteurMembreConseilSyndical(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnrichirExpediteur: %v", err)
 	}
-	if !ctx.ARole(domain.RoleClient) || !ctx.ARole(domain.RoleConseilSyndical) {
-		t.Errorf("Roles = %+v, attendu client ET conseil_syndical", ctx.Roles)
+	if !ctx.ARole(domain.RoleCoproprietaire) || !ctx.ARole(domain.RoleConseilSyndical) {
+		t.Errorf("Roles = %+v, attendu coproprietaire ET conseil_syndical", ctx.Roles)
 	}
 	if len(ctx.CoproprietesConseilSyndical) != 1 || ctx.CoproprietesConseilSyndical[0].CoproprieteReference != "COP1" {
 		t.Errorf("CoproprietesConseilSyndical = %+v", ctx.CoproprietesConseilSyndical)
@@ -294,7 +294,7 @@ func TestEnrichirExpediteurNonClientPasDeRequeteConseilSyndical(t *testing.T) {
 			"locataire@example.com": {ID: 1, EstPhysique: &vrai, EstOccupant: &vrai, Reference: "PER1"},
 		},
 		// Si EnrichirExpediteur interrogeait quand même le conseil syndical
-		// pour un simple occupant (non client), ce mandat serait vu à tort.
+		// pour un simple occupant (non coproprietaire), ce mandat serait vu à tort.
 		coproprietesConseilSynd: map[int64][]repository.CoproprieteAssociee{
 			1: {{CoproprieteID: 1, CoproprieteReference: "COP1"}},
 		},
@@ -305,7 +305,7 @@ func TestEnrichirExpediteurNonClientPasDeRequeteConseilSyndical(t *testing.T) {
 		t.Fatalf("EnrichirExpediteur: %v", err)
 	}
 	if ctx.ARole(domain.RoleConseilSyndical) {
-		t.Errorf("Roles = %+v, attendu pas conseil_syndical (occupant non client)", ctx.Roles)
+		t.Errorf("Roles = %+v, attendu pas conseil_syndical (occupant non coproprietaire)", ctx.Roles)
 	}
 }
 

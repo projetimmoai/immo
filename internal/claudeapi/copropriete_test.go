@@ -42,4 +42,34 @@ func TestDecideCoproprieteCasNonAmbigu(t *testing.T) {
 	}
 }
 
+// TestDecideCoproprieteRoleCoproprietaire vérifie, avec un vrai appel à
+// l'API, que la valeur d'enum renommée "coproprietaire" (ex "client") est
+// bien acceptée par le schéma de l'outil et correctement reconnue en
+// retour : un e-mail qui parle sans ambiguïté de charges de copropriété
+// doit être attribué au rôle coproprietaire.
+func TestDecideCoproprieteRoleCoproprietaire(t *testing.T) {
+	c := newTestClient(t)
+	ctx := context.Background()
+
+	candidats := []domain.CandidatCopropriete{
+		{CoproprieteID: 1, CoproprieteReference: "COP1", CoproprieteNom: strPtr("Residence Horizon"), Roles: []domain.Role{domain.RoleCoproprietaire}},
+		{CoproprieteID: 2, CoproprieteReference: "COP2", CoproprieteNom: strPtr("Les Herbiers"), Roles: []domain.Role{domain.RoleGestionnaire}},
+	}
+
+	decision, err := c.DecideCopropriete(
+		ctx, candidats,
+		"Question sur mes charges de copropriété",
+		"Bonjour, je suis propriétaire d'un lot à la Residence Horizon et je m'interroge sur le montant de mes charges de copropriété de ce trimestre. Merci de me répondre.",
+	)
+	if err != nil {
+		t.Fatalf("DecideCopropriete: %v", err)
+	}
+	if decision.Role == nil || *decision.Role != domain.RoleCoproprietaire {
+		t.Fatalf("Role = %v, attendu %q — decision=%+v", decision.Role, domain.RoleCoproprietaire, decision)
+	}
+	if decision.CoproprieteID == nil || *decision.CoproprieteID != 1 {
+		t.Errorf("CoproprieteID = %v, attendu 1 — decision=%+v", decision.CoproprieteID, decision)
+	}
+}
+
 func strPtr(s string) *string { return &s }

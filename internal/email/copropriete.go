@@ -163,11 +163,12 @@ func referenceDuCandidat(candidats []domain.CandidatCopropriete, id int64) (stri
 // dédupliquées par CoproprieteID (une même copropriete peut apparaître
 // sous plusieurs rôles : ses Roles cumulent alors les rôles concernés).
 //
-// Limitation connue : Coproprietes (occupant/client) vient de Lots, qui ne
-// distingue pas occupant de client au niveau du lot (cf. doc de Contexte)
-// — chaque copropriete de cette liste se voit donc attribuer tous les
-// rôles parmi {occupant, client} présents globalement chez la Personne,
-// pas seulement celui réellement associé à ce lot précis.
+// Limitation connue : Coproprietes (occupant/coproprietaire) vient de
+// Lots, qui ne distingue pas occupant de coproprietaire au niveau du lot
+// (cf. doc de Contexte) — chaque copropriete de cette liste se voit donc
+// attribuer tous les rôles parmi {occupant, coproprietaire} présents
+// globalement chez la Personne, pas seulement celui réellement associé à
+// ce lot précis.
 func candidatsCoproprietes(ec *Contexte) []domain.CandidatCopropriete {
 	index := make(map[int64]*domain.CandidatCopropriete)
 	var ordre []int64
@@ -187,14 +188,14 @@ func candidatsCoproprietes(ec *Contexte) []domain.CandidatCopropriete {
 		c.Roles = append(c.Roles, role)
 	}
 
-	occupant, client := ec.ARole(domain.RoleOccupant), ec.ARole(domain.RoleClient)
-	if occupant || client {
+	occupant, coproprietaire := ec.ARole(domain.RoleOccupant), ec.ARole(domain.RoleCoproprietaire)
+	if occupant || coproprietaire {
 		for _, cop := range ec.Coproprietes {
 			if occupant {
 				ajouter(cop.CoproprieteID, cop.CoproprieteNom, cop.CoproprieteReference, domain.RoleOccupant)
 			}
-			if client {
-				ajouter(cop.CoproprieteID, cop.CoproprieteNom, cop.CoproprieteReference, domain.RoleClient)
+			if coproprietaire {
+				ajouter(cop.CoproprieteID, cop.CoproprieteNom, cop.CoproprieteReference, domain.RoleCoproprietaire)
 			}
 		}
 	}
