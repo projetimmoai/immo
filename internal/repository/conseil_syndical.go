@@ -153,3 +153,47 @@ func (c *Client) DeleteConseilSyndicalPresident(ctx context.Context, id int64) e
 	}
 	return nil
 }
+
+// conseilSyndicalMandatCoproprieteRow reflète la forme de la réponse JSON
+// avec ressource imbriquée de ListCoproprietesConseilSyndicalParPersonne.
+type conseilSyndicalMandatCoproprieteRow struct {
+	Copropriete *struct {
+		ID        int64   `json:"id"`
+		Nom       *string `json:"nom"`
+		Reference string  `json:"reference"`
+	} `json:"copropriete"`
+}
+
+// ListCoproprietesConseilSyndicalParPersonne retourne toutes les
+// copropriete pour lesquelles la Personne donnée a un mandat actif de
+// membre du conseil syndical (conseil_syndical_mandat, statut "membre") —
+// utilisé pour enrichir le contexte d'un e-mail (internal/email) quand son
+// expéditeur est copropriétaire, afin de distinguer un copropriétaire
+// ordinaire d'un membre du conseil syndical.
+func (c *Client) ListCoproprietesConseilSyndicalParPersonne(ctx context.Context, personneID int64) ([]CoproprieteAssociee, error) {
+	statutMembreID, err := c.ConseilSyndicalMandatStatutID(ctx, domain.ConseilSyndicalMandatStatutMembre)
+	if err != nil {
+		return nil, fmt.Errorf("repository: résolution du statut %q de conseil_syndical_mandat_statut: %w", domain.ConseilSyndicalMandatStatutMembre, err)
+	}
+
+	path := fmt.Sprintf(
+		"/conseil_syndical_mandat?select=copropriete(id,nom,reference)&personne_id=eq.%d&statut_id=eq.%d",
+		personneID, statutMembreID,
+	)
+	var rows []conseilSyndicalMandatCoproprieteRow
+	if err := c.do(ctx, http.MethodGet, path, nil, &rows); err != nil {
+		return nil, fmt.Errorf("repository: recherche des mandats de conseil syndical de la personne id=%d: %w", personneID, err)
+	}
+	result := make([]CoproprieteAssociee, 0, len(rows))
+	for _, r := range rows {
+		if r.Copropriete == nil {
+			continue
+		}
+		result = append(result, CoproprieteAssociee{
+			CoproprieteID:        r.Copropriete.ID,
+			CoproprieteNom:       r.Copropriete.Nom,
+			CoproprieteReference: r.Copropriete.Reference,
+		})
+	}
+	return result, nil
+}

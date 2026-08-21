@@ -9,12 +9,13 @@ import (
 )
 
 type fakeRepo struct {
-	personnes          map[string]*domain.Personne // par email
-	personnesPhysique  map[int64]*domain.PersonnePhysique
-	personnesMorale    map[int64]*domain.PersonneMorale
-	lots               map[int64][]repository.LotAssocie
-	contrats           map[int64][]repository.ContratAssocie
-	coproprietesGerees map[int64][]repository.CoproprieteAssociee
+	personnes               map[string]*domain.Personne // par email
+	personnesPhysique       map[int64]*domain.PersonnePhysique
+	personnesMorale         map[int64]*domain.PersonneMorale
+	lots                    map[int64][]repository.LotAssocie
+	contrats                map[int64][]repository.ContratAssocie
+	coproprietesGerees      map[int64][]repository.CoproprieteAssociee
+	coproprietesConseilSynd map[int64][]repository.CoproprieteAssociee
 }
 
 func (f *fakeRepo) FindPersonneByEmail(_ context.Context, email string) (*domain.Personne, error) {
@@ -39,6 +40,10 @@ func (f *fakeRepo) ListContratsParFournisseur(_ context.Context, entrepriseID in
 
 func (f *fakeRepo) ListCoproprietesParGestionnaire(_ context.Context, personneID int64) ([]repository.CoproprieteAssociee, error) {
 	return f.coproprietesGerees[personneID], nil
+}
+
+func (f *fakeRepo) ListCoproprietesConseilSyndicalParPersonne(_ context.Context, personneID int64) ([]repository.CoproprieteAssociee, error) {
+	return f.coproprietesConseilSynd[personneID], nil
 }
 
 func TestEnrichirExpediteurInconnu(t *testing.T) {
@@ -235,6 +240,72 @@ func TestEnrichirExpediteurConnuSansRole(t *testing.T) {
 	}
 	if ctx.Contrats != nil || ctx.Lots != nil || ctx.CoproprietesGestion != nil {
 		t.Errorf("attendu aucun appel complémentaire sans rôle : Contrats=%+v Lots=%+v CoproprietesGestion=%+v", ctx.Contrats, ctx.Lots, ctx.CoproprietesGestion)
+	}
+}
+
+func TestEnrichirExpediteurMembreConseilSyndical(t *testing.T) {
+	vrai := true
+	nomCop := "Le Clos des Vignes"
+	repo := &fakeRepo{
+		personnes: map[string]*domain.Personne{
+			"presidente@example.com": {ID: 1, EstPhysique: &vrai, EstClient: &vrai, Reference: "PER1"},
+		},
+		coproprietesConseilSynd: map[int64][]repository.CoproprieteAssociee{
+			1: {{CoproprieteID: 1, CoproprieteNom: &nomCop, CoproprieteReference: "COP1"}},
+		},
+	}
+
+	ctx, err := EnrichirExpediteur(context.Background(), repo, "presidente@example.com")
+	if err != nil {
+		t.Fatalf("EnrichirExpediteur: %v", err)
+	}
+	if !ctx.ARole(domain.RoleClient) || !ctx.ARole(domain.RoleConseilSyndical) {
+		t.Errorf("Roles = %+v, attendu client ET conseil_syndical", ctx.Roles)
+	}
+	if len(ctx.CoproprietesConseilSyndical) != 1 || ctx.CoproprietesConseilSyndical[0].CoproprieteReference != "COP1" {
+		t.Errorf("CoproprietesConseilSyndical = %+v", ctx.CoproprietesConseilSyndical)
+	}
+}
+
+func TestEnrichirExpediteurClientSansMandatConseilSyndical(t *testing.T) {
+	vrai := true
+	repo := &fakeRepo{
+		personnes: map[string]*domain.Personne{
+			"proprio@example.com": {ID: 1, EstPhysique: &vrai, EstClient: &vrai, Reference: "PER1"},
+		},
+	}
+
+	ctx, err := EnrichirExpediteur(context.Background(), repo, "proprio@example.com")
+	if err != nil {
+		t.Fatalf("EnrichirExpediteur: %v", err)
+	}
+	if ctx.ARole(domain.RoleConseilSyndical) {
+		t.Errorf("Roles = %+v, attendu pas conseil_syndical (aucun mandat actif)", ctx.Roles)
+	}
+	if ctx.CoproprietesConseilSyndical != nil {
+		t.Errorf("CoproprietesConseilSyndical = %+v, attendu nil", ctx.CoproprietesConseilSyndical)
+	}
+}
+
+func TestEnrichirExpediteurNonClientPasDeRequeteConseilSyndical(t *testing.T) {
+	vrai := true
+	repo := &fakeRepo{
+		personnes: map[string]*domain.Personne{
+			"locataire@example.com": {ID: 1, EstPhysique: &vrai, EstOccupant: &vrai, Reference: "PER1"},
+		},
+		// Si EnrichirExpediteur interrogeait quand même le conseil syndical
+		// pour un simple occupant (non client), ce mandat serait vu à tort.
+		coproprietesConseilSynd: map[int64][]repository.CoproprieteAssociee{
+			1: {{CoproprieteID: 1, CoproprieteReference: "COP1"}},
+		},
+	}
+
+	ctx, err := EnrichirExpediteur(context.Background(), repo, "locataire@example.com")
+	if err != nil {
+		t.Fatalf("EnrichirExpediteur: %v", err)
+	}
+	if ctx.ARole(domain.RoleConseilSyndical) {
+		t.Errorf("Roles = %+v, attendu pas conseil_syndical (occupant non client)", ctx.Roles)
 	}
 }
 
