@@ -61,7 +61,7 @@ func TestEnrichirExpediteurInconnu(t *testing.T) {
 	}
 }
 
-func TestEnrichirExpediteurOccupantEtClient(t *testing.T) {
+func TestEnrichirExpediteurOccupantEtCoproprietaire(t *testing.T) {
 	vrai := true
 	nom := "Dupont"
 	repo := &fakeRepo{
@@ -267,7 +267,7 @@ func TestEnrichirExpediteurMembreConseilSyndical(t *testing.T) {
 	}
 }
 
-func TestEnrichirExpediteurClientSansMandatConseilSyndical(t *testing.T) {
+func TestEnrichirExpediteurCoproprietaireSansMandatConseilSyndical(t *testing.T) {
 	vrai := true
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
@@ -287,7 +287,7 @@ func TestEnrichirExpediteurClientSansMandatConseilSyndical(t *testing.T) {
 	}
 }
 
-func TestEnrichirExpediteurNonClientPasDeRequeteConseilSyndical(t *testing.T) {
+func TestEnrichirExpediteurNonCoproprietairePasDeRequeteConseilSyndical(t *testing.T) {
 	vrai := true
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{

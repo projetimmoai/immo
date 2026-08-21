@@ -210,10 +210,10 @@ func TestDetermineCopropretePlusieursCandidatsSansClaudeConfigure(t *testing.T) 
 }
 
 func TestDetermineCoproprieteLogueSiConfianceFaible(t *testing.T) {
-	client := &domain.Personne{ID: 42}
+	gestionnaire := &domain.Personne{ID: 42}
 	ec := &Contexte{
 		Connu:    true,
-		Personne: client,
+		Personne: gestionnaire,
 		Roles:    []domain.Role{domain.RoleGestionnaire},
 		CoproprietesGestion: []repository.CoproprieteAssociee{
 			{CoproprieteID: 1, CoproprieteReference: "COP1"},
