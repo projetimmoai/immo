@@ -16,6 +16,7 @@ import (
 type LotAssocie struct {
 	LotPersonneMapID     int64
 	EstProprietaire      *bool
+	EstOccupant          *bool
 	EstGestionnaire      *bool
 	EstIndivision        *bool
 	Debut                *time.Time
@@ -33,6 +34,7 @@ type LotAssocie struct {
 type lotPersonneMapRow struct {
 	ID              int64      `json:"id"`
 	EstProprietaire *bool      `json:"est_proprietaire"`
+	EstOccupant     *bool      `json:"est_occupant"`
 	EstGestionnaire *bool      `json:"est_gestionnaire"`
 	EstIndivision   *bool      `json:"est_indivision"`
 	Debut           *time.Time `json:"debut"`
@@ -58,7 +60,7 @@ type lotPersonneMapRow struct {
 // contexte d'un e-mail (internal/email) à partir de son expéditeur.
 func (c *Client) ListLotsParPersonne(ctx context.Context, personneID int64) ([]LotAssocie, error) {
 	path := fmt.Sprintf(
-		"/lot_personne_map?select=id,est_proprietaire,est_gestionnaire,est_indivision,debut,fin,lot(id,numero,reference,batiment(id,copropriete(id,nom,reference)))&personne_id=eq.%d",
+		"/lot_personne_map?select=id,est_proprietaire,est_occupant,est_gestionnaire,est_indivision,debut,fin,lot(id,numero,reference,batiment(id,copropriete(id,nom,reference)))&personne_id=eq.%d",
 		personneID,
 	)
 	var rows []lotPersonneMapRow
@@ -71,6 +73,7 @@ func (c *Client) ListLotsParPersonne(ctx context.Context, personneID int64) ([]L
 		la := LotAssocie{
 			LotPersonneMapID: r.ID,
 			EstProprietaire:  r.EstProprietaire,
+			EstOccupant:      r.EstOccupant,
 			EstGestionnaire:  r.EstGestionnaire,
 			EstIndivision:    r.EstIndivision,
 			Debut:            r.Debut,

@@ -66,13 +66,15 @@ func TestEnrichirExpediteurOccupantEtCoproprietaire(t *testing.T) {
 	nom := "Dupont"
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
-			"jean@example.com": {ID: 1, EstPhysique: &vrai, EstOccupant: &vrai, EstCoproprietaire: &vrai, Reference: "PER1"},
+			"jean@example.com": {ID: 1, EstPhysique: &vrai, Reference: "PER1"},
 		},
 		personnesPhysique: map[int64]*domain.PersonnePhysique{
 			1: {ID: 10, Nom: &nom},
 		},
 		lots: map[int64][]repository.LotAssocie{
-			1: {{LotID: 100, LotReference: "LOT1", CoproprieteReference: "COP1", EstProprietaire: &vrai}},
+			// Propriétaire occupant de son propre lot : les deux rôles
+			// viennent du même lot.
+			1: {{LotID: 100, LotReference: "LOT1", CoproprieteReference: "COP1", EstProprietaire: &vrai, EstOccupant: &vrai}},
 		},
 	}
 
@@ -98,9 +100,9 @@ func TestEnrichirExpediteurOccupantEtCoproprietaire(t *testing.T) {
 	if len(ctx.Coproprietes) != 1 || ctx.Coproprietes[0].CoproprieteReference != "COP1" {
 		t.Errorf("Coproprietes = %+v", ctx.Coproprietes)
 	}
-	// Ni fournisseur ni gestionnaire : pas d'appel réseau inutile attendu.
+	// Personne physique : pas de requête contrats (gated sur PersonneMorale != nil).
 	if ctx.Contrats != nil {
-		t.Errorf("Contrats = %+v, attendu nil (pas fournisseur)", ctx.Contrats)
+		t.Errorf("Contrats = %+v, attendu nil (personne physique)", ctx.Contrats)
 	}
 	if ctx.CoproprietesGestion != nil {
 		t.Errorf("CoproprietesGestion = %+v, attendu nil (pas gestionnaire)", ctx.CoproprietesGestion)
@@ -111,7 +113,7 @@ func TestEnrichirExpediteurCoproprietesDedupliquees(t *testing.T) {
 	vrai := true
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
-			"proprio@example.com": {ID: 6, EstPhysique: &vrai, EstCoproprietaire: &vrai, Reference: "PER6"},
+			"proprio@example.com": {ID: 6, EstPhysique: &vrai, Reference: "PER6"},
 		},
 		lots: map[int64][]repository.LotAssocie{
 			6: {
@@ -136,13 +138,12 @@ func TestEnrichirExpediteurCoproprietesDedupliquees(t *testing.T) {
 
 func TestEnrichirExpediteurFournisseurAvecContrats(t *testing.T) {
 	faux := false
-	vrai := true
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
 			"contact@fournisseur.example": {ID: 2, EstPhysique: &faux, Reference: "PER2"},
 		},
 		personnesMorale: map[int64]*domain.PersonneMorale{
-			2: {ID: 20, EstFournisseur: &vrai},
+			2: {ID: 20},
 		},
 		contrats: map[int64][]repository.ContratAssocie{
 			2: {{ContratID: 200, NumeroContrat: strPtr("CTR-1"), CoproprieteID: 1, CoproprieteReference: "COP1"}},
@@ -154,7 +155,7 @@ func TestEnrichirExpediteurFournisseurAvecContrats(t *testing.T) {
 		t.Fatalf("EnrichirExpediteur: %v", err)
 	}
 	if !ctx.ARole(domain.RoleFournisseur) {
-		t.Errorf("Roles = %+v, attendu fournisseur", ctx.Roles)
+		t.Errorf("Roles = %+v, attendu fournisseur (au moins un contrat)", ctx.Roles)
 	}
 	if ctx.PersonneMorale == nil || ctx.PersonneMorale.ID != 20 {
 		t.Errorf("PersonneMorale = %+v", ctx.PersonneMorale)
@@ -163,7 +164,28 @@ func TestEnrichirExpediteurFournisseurAvecContrats(t *testing.T) {
 		t.Errorf("Contrats = %+v", ctx.Contrats)
 	}
 	if ctx.Lots != nil {
-		t.Errorf("Lots = %+v, attendu nil (ni occupant ni coproprietaire)", ctx.Lots)
+		t.Errorf("Lots = %+v, attendu nil (aucun lot associé)", ctx.Lots)
+	}
+}
+
+func TestEnrichirExpediteurPersonneMoraleSansContratNestPasFournisseur(t *testing.T) {
+	faux := false
+	repo := &fakeRepo{
+		personnes: map[string]*domain.Personne{
+			"cabinet@example.com": {ID: 7, EstPhysique: &faux, Reference: "PER7"},
+		},
+		personnesMorale: map[int64]*domain.PersonneMorale{
+			7: {ID: 70, EstCabinetGestion: boolPtr(true)},
+		},
+		// Aucun contrat pour cette personne_id dans la fake.
+	}
+
+	ctx, err := EnrichirExpediteur(context.Background(), repo, "cabinet@example.com")
+	if err != nil {
+		t.Fatalf("EnrichirExpediteur: %v", err)
+	}
+	if ctx.ARole(domain.RoleFournisseur) {
+		t.Errorf("Roles = %+v, attendu pas fournisseur (aucun contrat)", ctx.Roles)
 	}
 }
 
@@ -199,10 +221,10 @@ func TestEnrichirExpediteurPlusieursRoles(t *testing.T) {
 	vrai := true
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
-			"multi@example.com": {
-				ID: 4, EstPhysique: &vrai,
-				EstOccupant: &vrai, EstCoproprietaire: &vrai, EstGestionnaire: &vrai,
-			},
+			"multi@example.com": {ID: 4, EstPhysique: &vrai, EstGestionnaire: &vrai},
+		},
+		lots: map[int64][]repository.LotAssocie{
+			4: {{LotID: 400, LotReference: "LOT4", CoproprieteReference: "COP1", EstProprietaire: &vrai, EstOccupant: &vrai}},
 		},
 	}
 
@@ -227,7 +249,7 @@ func TestEnrichirExpediteurConnuSansRole(t *testing.T) {
 			"syndic@copro.example": {ID: 5, EstPhysique: &faux, Reference: "PER5"},
 		},
 		personnesMorale: map[int64]*domain.PersonneMorale{
-			5: {ID: 50, EstFournisseur: &faux},
+			5: {ID: 50},
 		},
 	}
 
@@ -238,8 +260,15 @@ func TestEnrichirExpediteurConnuSansRole(t *testing.T) {
 	if len(ctx.Roles) != 0 {
 		t.Errorf("Roles = %+v, attendu vide", ctx.Roles)
 	}
-	if ctx.Contrats != nil || ctx.Lots != nil || ctx.CoproprietesGestion != nil {
-		t.Errorf("attendu aucun appel complémentaire sans rôle : Contrats=%+v Lots=%+v CoproprietesGestion=%+v", ctx.Contrats, ctx.Lots, ctx.CoproprietesGestion)
+	// Lots et Contrats sont désormais toujours interrogés (pour dériver
+	// occupant/coproprietaire/fournisseur), mais reviennent vides ici faute
+	// de données dans la fake ; CoproprietesGestion reste conditionné à
+	// RoleGestionnaire (booléen direct), donc jamais interrogé ici.
+	if ctx.Contrats != nil || ctx.Lots != nil {
+		t.Errorf("attendu Contrats/Lots vides (aucune donnée) : Contrats=%+v Lots=%+v", ctx.Contrats, ctx.Lots)
+	}
+	if ctx.CoproprietesGestion != nil {
+		t.Errorf("CoproprietesGestion = %+v, attendu nil (pas gestionnaire, jamais interrogé)", ctx.CoproprietesGestion)
 	}
 }
 
@@ -248,7 +277,10 @@ func TestEnrichirExpediteurMembreConseilSyndical(t *testing.T) {
 	nomCop := "Le Clos des Vignes"
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
-			"presidente@example.com": {ID: 1, EstPhysique: &vrai, EstCoproprietaire: &vrai, Reference: "PER1"},
+			"presidente@example.com": {ID: 1, EstPhysique: &vrai, Reference: "PER1"},
+		},
+		lots: map[int64][]repository.LotAssocie{
+			1: {{LotID: 100, LotReference: "LOT1", CoproprieteID: 1, CoproprieteReference: "COP1", EstProprietaire: &vrai}},
 		},
 		coproprietesConseilSynd: map[int64][]repository.CoproprieteAssociee{
 			1: {{CoproprieteID: 1, CoproprieteNom: &nomCop, CoproprieteReference: "COP1"}},
@@ -271,7 +303,10 @@ func TestEnrichirExpediteurCoproprietaireSansMandatConseilSyndical(t *testing.T)
 	vrai := true
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
-			"proprio@example.com": {ID: 1, EstPhysique: &vrai, EstCoproprietaire: &vrai, Reference: "PER1"},
+			"proprio@example.com": {ID: 1, EstPhysique: &vrai, Reference: "PER1"},
+		},
+		lots: map[int64][]repository.LotAssocie{
+			1: {{LotID: 100, LotReference: "LOT1", CoproprieteID: 1, CoproprieteReference: "COP1", EstProprietaire: &vrai}},
 		},
 	}
 
@@ -291,7 +326,11 @@ func TestEnrichirExpediteurNonCoproprietairePasDeRequeteConseilSyndical(t *testi
 	vrai := true
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
-			"locataire@example.com": {ID: 1, EstPhysique: &vrai, EstOccupant: &vrai, Reference: "PER1"},
+			"locataire@example.com": {ID: 1, EstPhysique: &vrai, Reference: "PER1"},
+		},
+		lots: map[int64][]repository.LotAssocie{
+			// Occupant, mais pas propriétaire : pas coproprietaire.
+			1: {{LotID: 100, LotReference: "LOT1", CoproprieteID: 1, CoproprieteReference: "COP1", EstOccupant: &vrai}},
 		},
 		// Si EnrichirExpediteur interrogeait quand même le conseil syndical
 		// pour un simple occupant (non coproprietaire), ce mandat serait vu à tort.
@@ -304,9 +343,13 @@ func TestEnrichirExpediteurNonCoproprietairePasDeRequeteConseilSyndical(t *testi
 	if err != nil {
 		t.Fatalf("EnrichirExpediteur: %v", err)
 	}
+	if !ctx.ARole(domain.RoleOccupant) {
+		t.Errorf("Roles = %+v, attendu occupant", ctx.Roles)
+	}
 	if ctx.ARole(domain.RoleConseilSyndical) {
 		t.Errorf("Roles = %+v, attendu pas conseil_syndical (occupant non coproprietaire)", ctx.Roles)
 	}
 }
 
 func strPtr(s string) *string { return &s }
+func boolPtr(b bool) *bool    { return &b }

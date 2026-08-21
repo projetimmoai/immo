@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 )
 
 // ContratAssocie décrit un contrat où la personne recherchée est
@@ -15,8 +14,8 @@ type ContratAssocie struct {
 	ContratID            int64
 	NumeroContrat        *string
 	CategorieTechniqueID *int64
-	DateDebut            *time.Time
-	DateFin              *time.Time
+	DateDebut            *Date // colonne SQL "date" (pas "timestamptz"), cf. Date
+	DateFin              *Date
 	CoproprieteID        int64
 	CoproprieteNom       *string
 	CoproprieteReference string
@@ -25,11 +24,11 @@ type ContratAssocie struct {
 // contratAssocieRow reflète la forme de la réponse JSON avec ressource
 // imbriquée de ListContratsParFournisseur.
 type contratAssocieRow struct {
-	ID                   int64      `json:"id"`
-	NumeroContrat        *string    `json:"numero_contrat"`
-	CategorieTechniqueID *int64     `json:"categorie_technique_id"`
-	DateDebut            *time.Time `json:"date_debut"`
-	DateFin              *time.Time `json:"date_fin"`
+	ID                   int64   `json:"id"`
+	NumeroContrat        *string `json:"numero_contrat"`
+	CategorieTechniqueID *int64  `json:"categorie_technique_id"`
+	DateDebut            *Date   `json:"date_debut"`
+	DateFin              *Date   `json:"date_fin"`
 	Copropriete          *struct {
 		ID        int64   `json:"id"`
 		Nom       *string `json:"nom"`

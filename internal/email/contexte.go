@@ -21,21 +21,25 @@ import (
 // dans ce cas.
 //
 // Une Personne peut cumuler plusieurs Role à la fois (cf. domain.Role) :
-// Roles liste tous les rôles applicables, jamais un seul. Lots,
-// Coproprietes et CoproprietesGestion rassemblent les coproprietes
-// concernées (pour occupant/coproprietaire via les lots, pour gestionnaire via
-// copropriete_collaborateur_map) ; Contrats les contrats fournisseur.
+// Roles liste tous les rôles applicables, jamais un seul. Lots et Contrats
+// sont désormais toujours interrogés pour toute Personne connue (pas
+// seulement quand un rôle laisse présager leur pertinence) : occupant,
+// coproprietaire et fournisseur sont dérivés de leur contenu plutôt que de
+// booléens sur Personne/PersonneMorale, donc il faut les avoir en main
+// avant même de calculer Roles (cf. rolesDe). CoproprietesGestion reste
+// conditionné à RoleGestionnaire (booléen direct, pas de dérivation
+// nécessaire).
 type Contexte struct {
 	Connu                       bool
 	Personne                    *domain.Personne
 	PersonnePhysique            *domain.PersonnePhysique         // renseigné si Personne.EstPhysique est vrai
 	PersonneMorale              *domain.PersonneMorale           // renseigné si Personne.EstPhysique est faux
 	Roles                       []domain.Role                    // tous les rôles applicables (occupant, coproprietaire, fournisseur, gestionnaire, conseil_syndical) — peut être vide si aucun
-	Lots                        []repository.LotAssocie          // lots où Personne est propriétaire, gestionnaire de lot ou indivisaire (pertinent pour RoleOccupant/RoleCoproprietaire)
-	Coproprietes                []repository.CoproprieteAssociee // coproprietes des Lots ci-dessus, dédupliquées (pertinent pour RoleOccupant/RoleCoproprietaire)
+	Lots                        []repository.LotAssocie          // tous les lots associés à Personne, quel que soit son rôle
+	Coproprietes                []repository.CoproprieteAssociee // coproprietes des Lots ci-dessus, dédupliquées
 	CoproprietesGestion         []repository.CoproprieteAssociee // coproprietes gérées par Personne (pertinent pour RoleGestionnaire)
 	CoproprietesConseilSyndical []repository.CoproprieteAssociee // coproprietes où Personne a un mandat actif de membre du conseil syndical (pertinent pour RoleConseilSyndical) — toujours un sous-ensemble de Coproprietes, seul un copropriétaire pouvant y siéger
-	Contrats                    []repository.ContratAssocie      // contrats où Personne est le fournisseur, avec leur copropriete (pertinent pour RoleFournisseur)
+	Contrats                    []repository.ContratAssocie      // contrats où Personne (morale) est l'entreprise, avec leur copropriete ; non vide <=> RoleFournisseur
 }
 
 // ARole indique si Roles contient le rôle donné.
@@ -90,9 +94,21 @@ func EnrichirExpediteur(ctx context.Context, repo contexteRepo, adresseEmail str
 		c.PersonneMorale = pm
 	}
 
-	c.Roles = rolesDe(personne, c.PersonneMorale)
+	// Occupant/coproprietaire n'étant plus des booléens sur Personne (cf.
+	// domain.Role), il faut d'abord interroger les lots pour les déduire —
+	// systématiquement, pas seulement quand un indice laissait présager un
+	// rôle : un appel réseau de plus par e-mail, accepté au profit d'une
+	// seule source de vérité (LotPersonneMap), sans risque de désync.
+	lots, err := repo.ListLotsParPersonne(ctx, personne.ID)
+	if err != nil {
+		return nil, fmt.Errorf("email: recherche des lots associés à %s (personne id=%d): %w", adresseEmail, personne.ID, err)
+	}
+	c.Lots = lots
+	c.Coproprietes = coproprietesDeLots(lots)
 
-	if c.ARole(domain.RoleFournisseur) {
+	// Idem pour fournisseur (personne morale uniquement) : dérivé de
+	// contrat.entreprise_id plutôt que d'un booléen sur personne_morale.
+	if c.PersonneMorale != nil {
 		contrats, err := repo.ListContratsParFournisseur(ctx, personne.ID)
 		if err != nil {
 			return nil, fmt.Errorf("email: recherche des contrats du fournisseur %s (personne id=%d): %w", adresseEmail, personne.ID, err)
@@ -100,14 +116,7 @@ func EnrichirExpediteur(ctx context.Context, repo contexteRepo, adresseEmail str
 		c.Contrats = contrats
 	}
 
-	if c.ARole(domain.RoleOccupant) || c.ARole(domain.RoleCoproprietaire) {
-		lots, err := repo.ListLotsParPersonne(ctx, personne.ID)
-		if err != nil {
-			return nil, fmt.Errorf("email: recherche des lots associés à %s (personne id=%d): %w", adresseEmail, personne.ID, err)
-		}
-		c.Lots = lots
-		c.Coproprietes = coproprietesDeLots(lots)
-	}
+	c.Roles = rolesDe(personne, lots, c.Contrats)
 
 	// Seul un copropriétaire (RoleCoproprietaire) peut siéger au conseil syndical :
 	// pas la peine d'interroger conseil_syndical_mandat sinon.
@@ -133,19 +142,32 @@ func EnrichirExpediteur(ctx context.Context, repo contexteRepo, adresseEmail str
 	return c, nil
 }
 
-// rolesDe déduit tous les Role applicables à une Personne à partir de ses
-// booléens (et de ceux de sa PersonneMorale le cas échéant, pour
-// RoleFournisseur). Peut retourner une liste vide (personne connue mais
-// aucun rôle particulier renseigné).
-func rolesDe(personne *domain.Personne, personneMorale *domain.PersonneMorale) []domain.Role {
+// rolesDe déduit tous les Role applicables à une Personne : RoleGestionnaire
+// reste lu directement sur un booléen (Personne.EstGestionnaire) ;
+// RoleOccupant/RoleCoproprietaire sont déduits de lots (au moins un lot où
+// LotAssocie.EstOccupant/EstProprietaire est vrai) et RoleFournisseur de
+// contrats (non vide) — cf. domain.Role pour le détail de ce choix de
+// conception. Peut retourner une liste vide (personne connue mais aucun
+// rôle particulier).
+func rolesDe(personne *domain.Personne, lots []repository.LotAssocie, contrats []repository.ContratAssocie) []domain.Role {
 	var roles []domain.Role
-	if personne.EstOccupant != nil && *personne.EstOccupant {
+
+	var estOccupant, estCoproprietaire bool
+	for _, lot := range lots {
+		if lot.EstOccupant != nil && *lot.EstOccupant {
+			estOccupant = true
+		}
+		if lot.EstProprietaire != nil && *lot.EstProprietaire {
+			estCoproprietaire = true
+		}
+	}
+	if estOccupant {
 		roles = append(roles, domain.RoleOccupant)
 	}
-	if personne.EstCoproprietaire != nil && *personne.EstCoproprietaire {
+	if estCoproprietaire {
 		roles = append(roles, domain.RoleCoproprietaire)
 	}
-	if personneMorale != nil && personneMorale.EstFournisseur != nil && *personneMorale.EstFournisseur {
+	if len(contrats) > 0 {
 		roles = append(roles, domain.RoleFournisseur)
 	}
 	if personne.EstGestionnaire != nil && *personne.EstGestionnaire {

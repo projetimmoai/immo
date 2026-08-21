@@ -5,9 +5,9 @@ import "time"
 // Copropriete représente un syndicat de copropriété. Le cabinet a deux
 // fonctions commerciales indépendantes vis-à-vis d'une Copropriete : syndic
 // de la copropriété entière (cf. EstSyndic), et/ou gestionnaire du lot d'un
-// copropriétaire en gestion locative (cf. Personne.EstCoproprietaire) — les deux
-// mandats sont toujours rattachés à une Copropriete existante, jamais l'un
-// sans l'autre.
+// copropriétaire en gestion locative (rôle Coproprietaire, cf. Role) — les
+// deux mandats sont toujours rattachés à une Copropriete existante, jamais
+// l'un sans l'autre.
 type Copropriete struct {
 	ID                                int64
 	CreatedAt                         *time.Time
@@ -77,8 +77,11 @@ type LotDesignation struct {
 	Description *string
 }
 
-// LotPersonneMap relie un Lot à une Personne (propriétaire, gestionnaire, indivisaire...)
-// sur une période donnée.
+// LotPersonneMap relie un Lot à une Personne (propriétaire, occupant,
+// gestionnaire, indivisaire...) sur une période donnée. EstProprietaire et
+// EstOccupant sont la source de vérité des rôles domain.RoleCoproprietaire
+// et domain.RoleOccupant (cf. email.rolesDe) — pas de booléen redondant sur
+// Personne.
 type LotPersonneMap struct {
 	ID              int64
 	CreatedAt       time.Time
@@ -88,6 +91,7 @@ type LotPersonneMap struct {
 	Debut           *time.Time // date
 	Fin             *time.Time // date
 	EstProprietaire *bool
+	EstOccupant     *bool
 	EstGestionnaire *bool
 	CreePar         *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
 }

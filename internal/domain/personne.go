@@ -6,6 +6,13 @@ import "time"
 // connue du système (propriétaire, locataire, collaborateur, fournisseur...).
 // Selon EstPhysique, elle est complétée par une ligne PersonnePhysique ou
 // PersonneMorale.
+//
+// Occupant et coproprietaire ne sont volontairement pas des champs ici :
+// ce sont des rôles dérivés de LotPersonneMap (est_occupant/est_proprietaire
+// sur chaque lot associé), pas des attributs intrinsèques de la personne —
+// cf. domain.Role et email.rolesDe, qui les calculent à partir des lots
+// plutôt que de dupliquer l'information dans une colonne à tenir
+// synchronisée (risque de désynchronisation écarté sciemment).
 type Personne struct {
 	ID                int64
 	CreatedAt         time.Time
@@ -21,9 +28,7 @@ type Personne struct {
 	Reference         string // référence lisible (ex: "PER1"), générée par la base (DEFAULT), jamais fournie à l'insertion
 	IBAN              *string
 	BIC               *string
-	EstGestionnaire   *bool  // membre du cabinet de gestion
-	EstOccupant       *bool  // occupe un lot (locataire ou propriétaire occupant)
-	EstCoproprietaire *bool  // propriétaire d'un lot ; le cabinet a deux fonctions commerciales indépendantes vis-à-vis d'elle : syndic de la copropriété (Copropriete.EstSyndic) et/ou gestionnaire de son lot en gestion locative
+	EstGestionnaire   *bool  // membre du cabinet de gestion — pas dérivable d'ailleurs (un collaborateur peut exister sans copropriete assignée), reste un attribut propre
 	CreePar           *int64 // FK -> personne.id (gestionnaire à l'origine de la création ; auto-référence)
 }
 
@@ -45,6 +50,12 @@ type PersonnePhysiqueGenre struct {
 }
 
 // PersonneMorale complète une Personne quand EstPhysique est faux.
+//
+// Fournisseur n'est volontairement pas un champ ici : c'est un rôle dérivé
+// de contrat.entreprise_id (au moins un contrat où cette personne morale
+// est l'entreprise), pas un attribut intrinsèque — même raisonnement que
+// pour les rôles occupant/coproprietaire d'une Personne, dérivés de
+// LotPersonneMap (cf. sa doc).
 type PersonneMorale struct {
 	ID                int64
 	CreatedAt         time.Time
@@ -53,7 +64,6 @@ type PersonneMorale struct {
 	EstCabinetGestion *bool
 	FormeJuridiqueID  *int64 // FK -> personne_morale_forme_juridique.id
 	PersonneID        *int64 // FK -> personne.id
-	EstFournisseur    *bool
 }
 
 // PersonneMoraleFormeJuridique est une table de référence (SCI, SARL, etc.).

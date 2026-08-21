@@ -26,8 +26,6 @@ type personneRow struct {
 	IBAN              *string   `json:"iban"`
 	BIC               *string   `json:"bic"`
 	EstGestionnaire   *bool     `json:"est_gestionnaire"`
-	EstOccupant       *bool     `json:"est_occupant"`
-	EstCoproprietaire *bool     `json:"est_coproprietaire"`
 	CreePar           *int64    `json:"cree_par"`
 }
 
@@ -48,8 +46,6 @@ func (r personneRow) toDomain() *domain.Personne {
 		IBAN:              r.IBAN,
 		BIC:               r.BIC,
 		EstGestionnaire:   r.EstGestionnaire,
-		EstOccupant:       r.EstOccupant,
-		EstCoproprietaire: r.EstCoproprietaire,
 		CreePar:           r.CreePar,
 	}
 }
@@ -128,7 +124,6 @@ type personneMoraleRow struct {
 	EstCabinetGestion *bool     `json:"est_cabinet_gestion"`
 	FormeJuridiqueID  *int64    `json:"forme_juridique_id"`
 	PersonneID        *int64    `json:"personne_id"`
-	EstFournisseur    *bool     `json:"est_fournisseur"`
 }
 
 func (r personneMoraleRow) toDomain() *domain.PersonneMorale {
@@ -140,7 +135,6 @@ func (r personneMoraleRow) toDomain() *domain.PersonneMorale {
 		EstCabinetGestion: r.EstCabinetGestion,
 		FormeJuridiqueID:  r.FormeJuridiqueID,
 		PersonneID:        r.PersonneID,
-		EstFournisseur:    r.EstFournisseur,
 	}
 }
 
