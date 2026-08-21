@@ -30,12 +30,23 @@ type Copropriete struct {
 	NumeroMandat                      *string
 	MandatDateDebut                   *time.Time // date
 	MandatDureeEnMois                 *int64
-	CodeICS                           *string
-	IBAN                              *string
-	BIC                               *string
 	MisAJour                          *time.Time
 	CreePar                           *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
 	Reference                         string // référence lisible (ex: "COP1"), générée par la base (DEFAULT), jamais fournie à l'insertion
+}
+
+// CoproprieteBanque complète une Copropriete avec ses informations
+// bancaires — dans une table séparée (pas des colonnes en plus sur
+// Copropriete) précisément pour que le RLS puisse la verrouiller
+// indépendamment : RLS filtre des lignes, jamais des colonnes, donc une
+// donnée sensible mélangée à des colonnes publiques dans la même table ne
+// peut pas être protégée par policy. Accès réservé à dirigeant/sys_admin
+// (voir la policy correspondante en base).
+type CoproprieteBanque struct {
+	CoproprieteID int64 // PK -> copropriete.id (1-1, pas d'id propre)
+	CodeICS       *string
+	IBAN          *string
+	BIC           *string
 }
 
 // Batiment est un bâtiment physique appartenant à une Copropriete.

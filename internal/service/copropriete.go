@@ -14,6 +14,14 @@ import (
 // CreateCoproprieteInput regroupe les champs fournis par l'appelant pour
 // créer une Copropriete. Nom et CreeParID sont obligatoires ; le reste est
 // optionnel et peut être complété plus tard (mise à jour ultérieure).
+//
+// Ne couvre volontairement pas les champs de CoproprieteBanque (iban, bic,
+// code_ics) : cette table séparée existe justement pour que RLS puisse la
+// verrouiller indépendamment de Copropriete (accès dirigeant/sys_admin
+// uniquement), et rien ne les renseigne encore — pas de
+// repository.InsertCoproprieteBanque pour l'instant, à ajouter via une
+// fonction Postgres en RPC le jour où ce sera nécessaire (deux écritures
+// liées, cf. CLAUDE.md), plutôt que deux appels REST séparés.
 type CreateCoproprieteInput struct {
 	Nom       string // requis
 	CreeParID int64  // requis : FK -> personne.id, le gestionnaire à l'origine de la création
@@ -36,9 +44,6 @@ type CreateCoproprieteInput struct {
 	NumeroMandat                      *string
 	MandatDateDebut                   *time.Time
 	MandatDureeEnMois                 *int64
-	CodeICS                           *string
-	IBAN                              *string
-	BIC                               *string
 }
 
 // coproprieteRepo est la portion de repository.Client utilisée ici — une
@@ -94,9 +99,6 @@ func (s *CoproprieteService) CreateCopropriete(ctx context.Context, in CreateCop
 		NumeroMandat:                      in.NumeroMandat,
 		MandatDateDebut:                   in.MandatDateDebut,
 		MandatDureeEnMois:                 in.MandatDureeEnMois,
-		CodeICS:                           in.CodeICS,
-		IBAN:                              in.IBAN,
-		BIC:                               in.BIC,
 	}
 
 	created, err := s.Repo.InsertCopropriete(ctx, cop)

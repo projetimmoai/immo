@@ -32,9 +32,6 @@ type coproprieteRow struct {
 	NumeroMandat                      *string    `json:"numero_mandat"`
 	MandatDateDebut                   *Date      `json:"mandat_date_debut"`
 	MandatDureeEnMois                 *int64     `json:"mandat_duree_en_mois"`
-	CodeICS                           *string    `json:"code_ics"`
-	IBAN                              *string    `json:"iban"`
-	BIC                               *string    `json:"bic"`
 	MisAJour                          *time.Time `json:"mis_a_jour"`
 	CreePar                           *int64     `json:"cree_par"`
 	Reference                         string     `json:"reference"`
@@ -63,9 +60,6 @@ func (r coproprieteRow) toDomain() *domain.Copropriete {
 		NumeroMandat:                      r.NumeroMandat,
 		MandatDateDebut:                   dateToTimePtr(r.MandatDateDebut),
 		MandatDureeEnMois:                 r.MandatDureeEnMois,
-		CodeICS:                           r.CodeICS,
-		IBAN:                              r.IBAN,
-		BIC:                               r.BIC,
 		MisAJour:                          r.MisAJour,
 		CreePar:                           r.CreePar,
 		Reference:                         r.Reference,
@@ -95,9 +89,6 @@ type coproprieteInsert struct {
 	NumeroMandat                      *string  `json:"numero_mandat,omitempty"`
 	MandatDateDebut                   *Date    `json:"mandat_date_debut,omitempty"`
 	MandatDureeEnMois                 *int64   `json:"mandat_duree_en_mois,omitempty"`
-	CodeICS                           *string  `json:"code_ics,omitempty"`
-	IBAN                              *string  `json:"iban,omitempty"`
-	BIC                               *string  `json:"bic,omitempty"`
 	CreePar                           *int64   `json:"cree_par,omitempty"`
 }
 
@@ -124,9 +115,6 @@ func (c *Client) InsertCopropriete(ctx context.Context, cop *domain.Copropriete)
 		NumeroMandat:                      cop.NumeroMandat,
 		MandatDateDebut:                   timePtrToDate(cop.MandatDateDebut),
 		MandatDureeEnMois:                 cop.MandatDureeEnMois,
-		CodeICS:                           cop.CodeICS,
-		IBAN:                              cop.IBAN,
-		BIC:                               cop.BIC,
 		CreePar:                           cop.CreePar,
 	}}
 	var rows []coproprieteRow
