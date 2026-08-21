@@ -34,7 +34,7 @@ func (f *fakeRepo) ListLotsParPersonne(_ context.Context, personneID int64) ([]r
 	return f.lots[personneID], nil
 }
 
-func (f *fakeRepo) ListContratsParFournisseur(_ context.Context, entrepriseID int64) ([]repository.ContratAssocie, error) {
+func (f *fakeRepo) ListContratsParPrestataire(_ context.Context, entrepriseID int64) ([]repository.ContratAssocie, error) {
 	return f.contrats[entrepriseID], nil
 }
 
@@ -88,8 +88,8 @@ func TestEnrichirExpediteurOccupantEtCoproprietaire(t *testing.T) {
 	if !ctx.ARole(domain.RoleOccupant) || !ctx.ARole(domain.RoleCoproprietaire) {
 		t.Errorf("Roles = %+v, attendu occupant ET coproprietaire", ctx.Roles)
 	}
-	if ctx.ARole(domain.RoleFournisseur) || ctx.ARole(domain.RoleGestionnaire) {
-		t.Errorf("Roles = %+v, attendu ni fournisseur ni gestionnaire", ctx.Roles)
+	if ctx.ARole(domain.RolePrestataire) || ctx.ARole(domain.RoleGestionnaire) {
+		t.Errorf("Roles = %+v, attendu ni prestataire ni gestionnaire", ctx.Roles)
 	}
 	if ctx.PersonnePhysique == nil || ctx.PersonnePhysique.ID != 10 {
 		t.Errorf("PersonnePhysique = %+v", ctx.PersonnePhysique)
@@ -136,11 +136,11 @@ func TestEnrichirExpediteurCoproprietesDedupliquees(t *testing.T) {
 	}
 }
 
-func TestEnrichirExpediteurFournisseurAvecContrats(t *testing.T) {
+func TestEnrichirExpediteurPrestataireAvecContrats(t *testing.T) {
 	faux := false
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
-			"contact@fournisseur.example": {ID: 2, EstPhysique: &faux, Reference: "PER2"},
+			"contact@prestataire.example": {ID: 2, EstPhysique: &faux, Reference: "PER2"},
 		},
 		personnesMorale: map[int64]*domain.PersonneMorale{
 			2: {ID: 20},
@@ -150,12 +150,12 @@ func TestEnrichirExpediteurFournisseurAvecContrats(t *testing.T) {
 		},
 	}
 
-	ctx, err := EnrichirExpediteur(context.Background(), repo, "contact@fournisseur.example")
+	ctx, err := EnrichirExpediteur(context.Background(), repo, "contact@prestataire.example")
 	if err != nil {
 		t.Fatalf("EnrichirExpediteur: %v", err)
 	}
-	if !ctx.ARole(domain.RoleFournisseur) {
-		t.Errorf("Roles = %+v, attendu fournisseur (au moins un contrat)", ctx.Roles)
+	if !ctx.ARole(domain.RolePrestataire) {
+		t.Errorf("Roles = %+v, attendu prestataire (au moins un contrat)", ctx.Roles)
 	}
 	if ctx.PersonneMorale == nil || ctx.PersonneMorale.ID != 20 {
 		t.Errorf("PersonneMorale = %+v", ctx.PersonneMorale)
@@ -168,7 +168,7 @@ func TestEnrichirExpediteurFournisseurAvecContrats(t *testing.T) {
 	}
 }
 
-func TestEnrichirExpediteurPersonneMoraleSansContratNestPasFournisseur(t *testing.T) {
+func TestEnrichirExpediteurPersonneMoraleSansContratNestPasPrestataire(t *testing.T) {
 	faux := false
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
@@ -184,8 +184,8 @@ func TestEnrichirExpediteurPersonneMoraleSansContratNestPasFournisseur(t *testin
 	if err != nil {
 		t.Fatalf("EnrichirExpediteur: %v", err)
 	}
-	if ctx.ARole(domain.RoleFournisseur) {
-		t.Errorf("Roles = %+v, attendu pas fournisseur (aucun contrat)", ctx.Roles)
+	if ctx.ARole(domain.RolePrestataire) {
+		t.Errorf("Roles = %+v, attendu pas prestataire (aucun contrat)", ctx.Roles)
 	}
 }
 
@@ -237,8 +237,8 @@ func TestEnrichirExpediteurPlusieursRoles(t *testing.T) {
 			t.Errorf("Roles = %+v, attendu %q parmi les rôles cumulés", ctx.Roles, r)
 		}
 	}
-	if ctx.ARole(domain.RoleFournisseur) {
-		t.Errorf("Roles = %+v, attendu pas fournisseur (personne physique)", ctx.Roles)
+	if ctx.ARole(domain.RolePrestataire) {
+		t.Errorf("Roles = %+v, attendu pas prestataire (personne physique)", ctx.Roles)
 	}
 }
 
@@ -261,7 +261,7 @@ func TestEnrichirExpediteurConnuSansRole(t *testing.T) {
 		t.Errorf("Roles = %+v, attendu vide", ctx.Roles)
 	}
 	// Lots et Contrats sont désormais toujours interrogés (pour dériver
-	// occupant/coproprietaire/fournisseur), mais reviennent vides ici faute
+	// occupant/coproprietaire/prestataire), mais reviennent vides ici faute
 	// de données dans la fake ; CoproprietesGestion reste conditionné à
 	// RoleGestionnaire (booléen direct), donc jamais interrogé ici.
 	if ctx.Contrats != nil || ctx.Lots != nil {

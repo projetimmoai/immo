@@ -205,7 +205,7 @@ func candidatsCoproprietes(ec *Contexte) []domain.CandidatCopropriete {
 	}
 
 	for _, contrat := range ec.Contrats {
-		ajouter(contrat.CoproprieteID, contrat.CoproprieteNom, contrat.CoproprieteReference, domain.RoleFournisseur)
+		ajouter(contrat.CoproprieteID, contrat.CoproprieteNom, contrat.CoproprieteReference, domain.RolePrestataire)
 	}
 
 	candidats := make([]domain.CandidatCopropriete, 0, len(ordre))

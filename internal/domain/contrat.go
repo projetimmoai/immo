@@ -9,7 +9,7 @@ type Contrat struct {
 	CreatedAt            time.Time
 	CoproprieteID        *int64 // FK -> copropriete.id
 	CategorieTechniqueID *int64 // FK -> categorie_technique.id (catalogue partagé avec Incident, cf. domain.CategorieTechnique)
-	EntrepriseID         *int64 // FK -> personne.id (personne_morale fournisseur)
+	EntrepriseID         *int64 // FK -> personne.id (personne_morale prestataire)
 	NumeroContrat        *string
 	DateDebut            *time.Time // date
 	DateFin              *time.Time // date

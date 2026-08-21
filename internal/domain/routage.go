@@ -4,7 +4,7 @@ package domain
 // copropriété identifiée (cf. email.DetermineCopropriete) : la personne
 // expéditrice et son rôle, la copropriété retenue, et — quand ils sont
 // déterminables pour cette copropriété précise — les références des lots
-// (occupant/coproprietaire) et les numéros de contrat (fournisseur) de
+// (occupant/coproprietaire) et les numéros de contrat (prestataire) de
 // cette personne. Utilisé par internal/email (construction, dispatch vers
 // les fonctions de traitement par action) et internal/claudeapi (entrée de
 // DecideAction).
@@ -14,5 +14,5 @@ type ContexteRoutage struct {
 	CoproprieteID        int64
 	CoproprieteReference string
 	LotsReferences       []string // références des lots de la Personne dans cette Copropriete, si occupant/coproprietaire
-	ContratsNumeros      []string // numéros des contrats de la Personne dans cette Copropriete, si fournisseur
+	ContratsNumeros      []string // numéros des contrats de la Personne dans cette Copropriete, si prestataire
 }

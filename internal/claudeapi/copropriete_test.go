@@ -72,4 +72,33 @@ func TestDecideCoproprieteRoleCoproprietaire(t *testing.T) {
 	}
 }
 
+// TestDecideCoproprieteRolePrestataire vérifie, avec un vrai appel à
+// l'API, que la valeur d'enum renommée "prestataire" (ex "fournisseur")
+// est bien acceptée par le schéma de l'outil et correctement reconnue en
+// retour.
+func TestDecideCoproprieteRolePrestataire(t *testing.T) {
+	c := newTestClient(t)
+	ctx := context.Background()
+
+	candidats := []domain.CandidatCopropriete{
+		{CoproprieteID: 1, CoproprieteReference: "COP1", CoproprieteNom: strPtr("Residence Horizon"), Roles: []domain.Role{domain.RolePrestataire}},
+		{CoproprieteID: 2, CoproprieteReference: "COP2", CoproprieteNom: strPtr("Les Herbiers"), Roles: []domain.Role{domain.RoleGestionnaire}},
+	}
+
+	decision, err := c.DecideCopropriete(
+		ctx, candidats,
+		"Question sur le contrat d'entretien - Residence Horizon",
+		"Bonjour, nous intervenons en tant que prestataire d'entretien pour la Residence Horizon, et nous avons une question sur le renouvellement du contrat de maintenance. Merci de nous recontacter.",
+	)
+	if err != nil {
+		t.Fatalf("DecideCopropriete: %v", err)
+	}
+	if decision.Role == nil || *decision.Role != domain.RolePrestataire {
+		t.Fatalf("Role = %v, attendu %q — decision=%+v", decision.Role, domain.RolePrestataire, decision)
+	}
+	if decision.CoproprieteID == nil || *decision.CoproprieteID != 1 {
+		t.Errorf("CoproprieteID = %v, attendu 1 — decision=%+v", decision.CoproprieteID, decision)
+	}
+}
+
 func strPtr(s string) *string { return &s }

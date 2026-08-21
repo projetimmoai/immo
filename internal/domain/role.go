@@ -11,7 +11,7 @@ package domain
 // calcul) :
 //   - RoleOccupant/RoleCoproprietaire : LotPersonneMap.EstOccupant/EstProprietaire
 //     sur au moins un lot de la Personne.
-//   - RoleFournisseur : au moins un contrat où PersonneMorale est l'entreprise
+//   - RolePrestataire : au moins un contrat où PersonneMorale est l'entreprise
 //     (contrat.entreprise_id).
 //   - RoleConseilSyndical : un mandat actif (statut "membre") dans conseil_syndical_mandat.
 //
@@ -23,7 +23,7 @@ type Role string
 const (
 	RoleOccupant        Role = "occupant"
 	RoleCoproprietaire  Role = "coproprietaire" // jamais la copropriété elle-même : cf. Copropriete.EstSyndic (syndic) et gestion locative de son lot, deux fonctions commerciales indépendantes du cabinet
-	RoleFournisseur     Role = "fournisseur"
+	RolePrestataire     Role = "prestataire"
 	RoleGestionnaire    Role = "gestionnaire"     // Personne.EstGestionnaire (membre du cabinet de gestion)
 	RoleConseilSyndical Role = "conseil_syndical" // mandat actif dans conseil_syndical_mandat (statut "membre") — s'ajoute à RoleCoproprietaire, ne le remplace pas : seul un copropriétaire peut siéger au conseil syndical
 )

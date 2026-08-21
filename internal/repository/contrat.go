@@ -7,7 +7,7 @@ import (
 )
 
 // ContratAssocie décrit un contrat où la personne recherchée est
-// l'entreprise fournisseur, avec la copropriété correspondante — résultat
+// l'entreprise prestataire, avec la copropriété correspondante — résultat
 // d'une seule requête PostgREST à ressource imbriquée (contrat ->
 // copropriete), plutôt que plusieurs appels séparés.
 type ContratAssocie struct {
@@ -22,7 +22,7 @@ type ContratAssocie struct {
 }
 
 // contratAssocieRow reflète la forme de la réponse JSON avec ressource
-// imbriquée de ListContratsParFournisseur.
+// imbriquée de ListContratsParPrestataire.
 type contratAssocieRow struct {
 	ID                   int64   `json:"id"`
 	NumeroContrat        *string `json:"numero_contrat"`
@@ -36,19 +36,19 @@ type contratAssocieRow struct {
 	} `json:"copropriete"`
 }
 
-// ListContratsParFournisseur retourne, en un seul appel REST, tous les
-// contrats où la Personne donnée est l'entreprise fournisseur
+// ListContratsParPrestataire retourne, en un seul appel REST, tous les
+// contrats où la Personne donnée est l'entreprise prestataire
 // (contrat.entreprise_id), avec la copropriété correspondante — utilisé
 // notamment pour enrichir le contexte d'un e-mail (internal/email) quand
-// son expéditeur est une personne_morale fournisseur.
-func (c *Client) ListContratsParFournisseur(ctx context.Context, entrepriseID int64) ([]ContratAssocie, error) {
+// son expéditeur est une personne_morale prestataire.
+func (c *Client) ListContratsParPrestataire(ctx context.Context, entrepriseID int64) ([]ContratAssocie, error) {
 	path := fmt.Sprintf(
 		"/contrat?select=id,numero_contrat,categorie_technique_id,date_debut,date_fin,copropriete(id,nom,reference)&entreprise_id=eq.%d",
 		entrepriseID,
 	)
 	var rows []contratAssocieRow
 	if err := c.do(ctx, http.MethodGet, path, nil, &rows); err != nil {
-		return nil, fmt.Errorf("repository: recherche des contrats du fournisseur personne id=%d: %w", entrepriseID, err)
+		return nil, fmt.Errorf("repository: recherche des contrats du prestataire personne id=%d: %w", entrepriseID, err)
 	}
 
 	result := make([]ContratAssocie, 0, len(rows))

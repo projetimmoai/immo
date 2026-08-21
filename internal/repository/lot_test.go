@@ -18,16 +18,16 @@ func TestListLotsParPersonneInconnue(t *testing.T) {
 	}
 }
 
-func TestListContratsParFournisseurInconnu(t *testing.T) {
+func TestListContratsParPrestataireInconnu(t *testing.T) {
 	c := newTestClient(t)
 	ctx := context.Background()
 
-	contrats, err := c.ListContratsParFournisseur(ctx, 0)
+	contrats, err := c.ListContratsParPrestataire(ctx, 0)
 	if err != nil {
-		t.Fatalf("ListContratsParFournisseur: %v", err)
+		t.Fatalf("ListContratsParPrestataire: %v", err)
 	}
 	if len(contrats) != 0 {
-		t.Fatalf("ListContratsParFournisseur: attendu aucun contrat pour entreprise_id=0, obtenu %+v", contrats)
+		t.Fatalf("ListContratsParPrestataire: attendu aucun contrat pour entreprise_id=0, obtenu %+v", contrats)
 	}
 }
 

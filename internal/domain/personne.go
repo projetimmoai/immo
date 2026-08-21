@@ -3,7 +3,7 @@ package domain
 import "time"
 
 // Personne est l'entité pivot commune à toute personne physique ou morale
-// connue du système (propriétaire, locataire, collaborateur, fournisseur...).
+// connue du système (propriétaire, locataire, collaborateur, prestataire...).
 // Selon EstPhysique, elle est complétée par une ligne PersonnePhysique ou
 // PersonneMorale.
 //
