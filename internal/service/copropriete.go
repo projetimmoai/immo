@@ -20,7 +20,8 @@ type CreateCoproprieteInput struct {
 	Nom       string // requis
 	CreeParID int64  // requis : FK -> personne.id, le gestionnaire à l'origine de la création
 
-	CabinetGestionID                  *int64
+	SyndicID                          *int64
+	EstSyndic                         *bool
 	AdresseCodePostal                 *string
 	AdresseVille                      *string
 	AdresseRegion                     *string
@@ -101,7 +102,8 @@ func (s *CoproprieteService) CreateCopropriete(ctx context.Context, in CreateCop
 	cop := &domain.Copropriete{
 		Nom:                               &nom,
 		CreePar:                           &creePar,
-		CabinetGestionID:                  in.CabinetGestionID,
+		SyndicID:                          in.SyndicID,
+		EstSyndic:                         in.EstSyndic,
 		AdresseCodePostal:                 in.AdresseCodePostal,
 		AdresseVille:                      in.AdresseVille,
 		AdresseRegion:                     in.AdresseRegion,

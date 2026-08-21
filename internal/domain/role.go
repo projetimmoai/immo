@@ -10,7 +10,7 @@ type Role string
 
 const (
 	RoleOccupant     Role = "occupant"     // Personne.EstOccupant
-	RoleClient       Role = "client"       // Personne.EstClient (copropriétaire)
+	RoleClient       Role = "client"       // Personne.EstClient — copropriétaire (Copropriete.EstSyndic) ou propriétaire en gestion locative (sans lien avec une Copropriete)
 	RoleFournisseur  Role = "fournisseur"  // PersonneMorale.EstFournisseur
 	RoleGestionnaire Role = "gestionnaire" // Personne.EstGestionnaire (membre du cabinet de gestion)
 )

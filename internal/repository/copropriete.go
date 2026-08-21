@@ -13,7 +13,8 @@ import (
 type coproprieteRow struct {
 	ID                                int64      `json:"id"`
 	CreatedAt                         *time.Time `json:"created_at"`
-	CabinetGestionID                  *int64     `json:"cabinet_gestion_id"`
+	SyndicID                          *int64     `json:"syndic_id"`
+	EstSyndic                         *bool      `json:"est_syndic"`
 	AdresseCodePostal                 *string    `json:"adresse_code_postal"`
 	AdresseVille                      *string    `json:"adresse_ville"`
 	AdressePaysCode                   *string    `json:"adresse_pays_code"`
@@ -43,7 +44,8 @@ func (r coproprieteRow) toDomain() *domain.Copropriete {
 	return &domain.Copropriete{
 		ID:                                r.ID,
 		CreatedAt:                         r.CreatedAt,
-		CabinetGestionID:                  r.CabinetGestionID,
+		SyndicID:                          r.SyndicID,
+		EstSyndic:                         r.EstSyndic,
 		AdresseCodePostal:                 r.AdresseCodePostal,
 		AdresseVille:                      r.AdresseVille,
 		AdressePaysCode:                   r.AdressePaysCode,
@@ -74,7 +76,8 @@ func (r coproprieteRow) toDomain() *domain.Copropriete {
 // uniquement les colonnes fournies par l'appelant (id/created_at/reference
 // sont générés par la base — reference via une séquence dédiée, cf. migration).
 type coproprieteInsert struct {
-	CabinetGestionID                  *int64     `json:"cabinet_gestion_id,omitempty"`
+	SyndicID                          *int64     `json:"syndic_id,omitempty"`
+	EstSyndic                         *bool      `json:"est_syndic,omitempty"`
 	AdresseCodePostal                 *string    `json:"adresse_code_postal,omitempty"`
 	AdresseVille                      *string    `json:"adresse_ville,omitempty"`
 	AdressePaysCode                   *string    `json:"adresse_pays_code,omitempty"`
@@ -102,7 +105,8 @@ type coproprieteInsert struct {
 // créée (avec son ID et sa Reference, ex "COP3", générés par la base).
 func (c *Client) InsertCopropriete(ctx context.Context, cop *domain.Copropriete) (*domain.Copropriete, error) {
 	payload := []coproprieteInsert{{
-		CabinetGestionID:                  cop.CabinetGestionID,
+		SyndicID:                          cop.SyndicID,
+		EstSyndic:                         cop.EstSyndic,
 		AdresseCodePostal:                 cop.AdresseCodePostal,
 		AdresseVille:                      cop.AdresseVille,
 		AdressePaysCode:                   cop.AdressePaysCode,

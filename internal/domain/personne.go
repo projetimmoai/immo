@@ -21,9 +21,9 @@ type Personne struct {
 	Reference         string // référence lisible (ex: "PER1"), générée par la base (DEFAULT), jamais fournie à l'insertion
 	IBAN              *string
 	BIC               *string
-	EstGestionnaire   *bool // membre du cabinet de gestion
-	EstOccupant       *bool // occupe un lot (locataire ou propriétaire occupant)
-	EstClient         *bool
+	EstGestionnaire   *bool  // membre du cabinet de gestion
+	EstOccupant       *bool  // occupe un lot (locataire ou propriétaire occupant)
+	EstClient         *bool  // client du cabinet : copropriétaire (cf. Copropriete.EstSyndic) ou propriétaire en gestion locative (bien loué, sans lien avec une Copropriete)
 	CreePar           *int64 // FK -> personne.id (gestionnaire à l'origine de la création ; auto-référence)
 }
 
