@@ -6,12 +6,12 @@ package domain
 // — jamais codé en dur ailleurs que dans ce fichier. Une Personne peut
 // cumuler plusieurs rôles à la fois (ex: copropriétaire ET occupant de son
 // propre lot) : Role n'est pas exclusif, cf. Personne.EstOccupant,
-// EstClient, EstGestionnaire et PersonneMorale.EstFournisseur.
+// EstCoproprietaire, EstGestionnaire et PersonneMorale.EstFournisseur.
 type Role string
 
 const (
 	RoleOccupant        Role = "occupant"         // Personne.EstOccupant
-	RoleClient          Role = "client"           // Personne.EstClient — copropriétaire, jamais la copropriété elle-même : cf. Copropriete.EstSyndic (syndic) et gestion locative de son lot, deux fonctions commerciales indépendantes du cabinet
+	RoleClient          Role = "client"           // Personne.EstCoproprietaire — jamais la copropriété elle-même : cf. Copropriete.EstSyndic (syndic) et gestion locative de son lot, deux fonctions commerciales indépendantes du cabinet
 	RoleFournisseur     Role = "fournisseur"      // PersonneMorale.EstFournisseur
 	RoleGestionnaire    Role = "gestionnaire"     // Personne.EstGestionnaire (membre du cabinet de gestion)
 	RoleConseilSyndical Role = "conseil_syndical" // mandat actif dans conseil_syndical_mandat (statut "membre") — s'ajoute à RoleClient, ne le remplace pas : seul un copropriétaire peut siéger au conseil syndical

@@ -142,7 +142,7 @@ func rolesDe(personne *domain.Personne, personneMorale *domain.PersonneMorale) [
 	if personne.EstOccupant != nil && *personne.EstOccupant {
 		roles = append(roles, domain.RoleOccupant)
 	}
-	if personne.EstClient != nil && *personne.EstClient {
+	if personne.EstCoproprietaire != nil && *personne.EstCoproprietaire {
 		roles = append(roles, domain.RoleClient)
 	}
 	if personneMorale != nil && personneMorale.EstFournisseur != nil && *personneMorale.EstFournisseur {

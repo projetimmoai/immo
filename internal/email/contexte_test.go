@@ -66,7 +66,7 @@ func TestEnrichirExpediteurOccupantEtClient(t *testing.T) {
 	nom := "Dupont"
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
-			"jean@example.com": {ID: 1, EstPhysique: &vrai, EstOccupant: &vrai, EstClient: &vrai, Reference: "PER1"},
+			"jean@example.com": {ID: 1, EstPhysique: &vrai, EstOccupant: &vrai, EstCoproprietaire: &vrai, Reference: "PER1"},
 		},
 		personnesPhysique: map[int64]*domain.PersonnePhysique{
 			1: {ID: 10, Nom: &nom},
@@ -111,7 +111,7 @@ func TestEnrichirExpediteurCoproprietesDedupliquees(t *testing.T) {
 	vrai := true
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
-			"proprio@example.com": {ID: 6, EstPhysique: &vrai, EstClient: &vrai, Reference: "PER6"},
+			"proprio@example.com": {ID: 6, EstPhysique: &vrai, EstCoproprietaire: &vrai, Reference: "PER6"},
 		},
 		lots: map[int64][]repository.LotAssocie{
 			6: {
@@ -201,7 +201,7 @@ func TestEnrichirExpediteurPlusieursRoles(t *testing.T) {
 		personnes: map[string]*domain.Personne{
 			"multi@example.com": {
 				ID: 4, EstPhysique: &vrai,
-				EstOccupant: &vrai, EstClient: &vrai, EstGestionnaire: &vrai,
+				EstOccupant: &vrai, EstCoproprietaire: &vrai, EstGestionnaire: &vrai,
 			},
 		},
 	}
@@ -248,7 +248,7 @@ func TestEnrichirExpediteurMembreConseilSyndical(t *testing.T) {
 	nomCop := "Le Clos des Vignes"
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
-			"presidente@example.com": {ID: 1, EstPhysique: &vrai, EstClient: &vrai, Reference: "PER1"},
+			"presidente@example.com": {ID: 1, EstPhysique: &vrai, EstCoproprietaire: &vrai, Reference: "PER1"},
 		},
 		coproprietesConseilSynd: map[int64][]repository.CoproprieteAssociee{
 			1: {{CoproprieteID: 1, CoproprieteNom: &nomCop, CoproprieteReference: "COP1"}},
@@ -271,7 +271,7 @@ func TestEnrichirExpediteurClientSansMandatConseilSyndical(t *testing.T) {
 	vrai := true
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
-			"proprio@example.com": {ID: 1, EstPhysique: &vrai, EstClient: &vrai, Reference: "PER1"},
+			"proprio@example.com": {ID: 1, EstPhysique: &vrai, EstCoproprietaire: &vrai, Reference: "PER1"},
 		},
 	}
 

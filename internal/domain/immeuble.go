@@ -5,7 +5,7 @@ import "time"
 // Copropriete représente un syndicat de copropriété. Le cabinet a deux
 // fonctions commerciales indépendantes vis-à-vis d'une Copropriete : syndic
 // de la copropriété entière (cf. EstSyndic), et/ou gestionnaire du lot d'un
-// copropriétaire en gestion locative (cf. Personne.EstClient) — les deux
+// copropriétaire en gestion locative (cf. Personne.EstCoproprietaire) — les deux
 // mandats sont toujours rattachés à une Copropriete existante, jamais l'un
 // sans l'autre.
 type Copropriete struct {
