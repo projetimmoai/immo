@@ -3,10 +3,11 @@ package domain
 import "time"
 
 // Copropriete représente un syndicat de copropriété. Le cabinet a deux
-// types de clients : les Copropriete pour lesquelles il est syndic (cf.
-// EstSyndic), et les personnes (physiques ou morales) qui lui confient un
-// bien en gestion locative (cf. Personne.EstClient, sans lien avec une
-// Copropriete).
+// fonctions commerciales indépendantes vis-à-vis d'une Copropriete : syndic
+// de la copropriété entière (cf. EstSyndic), et/ou gestionnaire du lot d'un
+// copropriétaire en gestion locative (cf. Personne.EstClient) — les deux
+// mandats sont toujours rattachés à une Copropriete existante, jamais l'un
+// sans l'autre.
 type Copropriete struct {
 	ID                                int64
 	CreatedAt                         *time.Time

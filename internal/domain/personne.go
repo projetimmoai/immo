@@ -23,7 +23,7 @@ type Personne struct {
 	BIC               *string
 	EstGestionnaire   *bool  // membre du cabinet de gestion
 	EstOccupant       *bool  // occupe un lot (locataire ou propriétaire occupant)
-	EstClient         *bool  // client du cabinet : copropriétaire (cf. Copropriete.EstSyndic) ou propriétaire en gestion locative (bien loué, sans lien avec une Copropriete)
+	EstClient         *bool  // client du cabinet en tant que copropriétaire (propriétaire d'un lot) — jamais en tant que copropriété elle-même ; le cabinet a deux fonctions commerciales indépendantes vis-à-vis d'elle : syndic de la copropriété (Copropriete.EstSyndic) et/ou gestionnaire de son lot en gestion locative
 	CreePar           *int64 // FK -> personne.id (gestionnaire à l'origine de la création ; auto-référence)
 }
 
