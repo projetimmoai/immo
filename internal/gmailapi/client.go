@@ -1,8 +1,8 @@
 // Package gmailapi est la couche d'accès à l'API Gmail v1 : authentification
 // OAuth2 "application installée" (le compte surveillé est un Gmail
 // personnel, un compte de service seul n'y a pas accès — contrairement à
-// internal/drive), puis appels REST avec un client net/http fait main —
-// même esprit que internal/repository (Supabase) et internal/drive.
+// internal/storage, Supabase), puis appels REST avec un client net/http
+// fait main — même esprit que internal/repository et internal/storage.
 package gmailapi
 
 import (

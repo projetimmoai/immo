@@ -5,12 +5,12 @@ import "time"
 // Valeurs connues de log_type.description. Ce sont des clés de recherche
 // (par description), jamais des ID en dur.
 const (
-	LogTypeCoproprieteNonIdentifiee   = "copropriete_non_identifiee"
-	LogTypeExpediteurInconnu          = "expediteur_inconnu"
-	LogTypeActionIndeterminee         = "action_indeterminee"
-	LogTypeConfianceFaible            = "confiance_faible"
-	LogTypeErreurAppelClaude          = "erreur_appel_claude"
-	LogTypeDesynchronisationBaseDrive = "desynchronisation_base_drive"
+	LogTypeCoproprieteNonIdentifiee      = "copropriete_non_identifiee"
+	LogTypeExpediteurInconnu             = "expediteur_inconnu"
+	LogTypeActionIndeterminee            = "action_indeterminee"
+	LogTypeConfianceFaible               = "confiance_faible"
+	LogTypeErreurAppelClaude             = "erreur_appel_claude"
+	LogTypeDesynchronisationBaseStockage = "desynchronisation_base_stockage"
 )
 
 // LogType est une table de référence pour les types d'évènements consignés

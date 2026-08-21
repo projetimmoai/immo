@@ -143,8 +143,7 @@ func (c *Client) InsertCopropriete(ctx context.Context, cop *domain.Copropriete)
 	return rows[0].toDomain(), nil
 }
 
-// ListCopropriete retourne toutes les coproprietes en base (utilisé
-// notamment par internal/check pour la vérification de cohérence base/Drive).
+// ListCopropriete retourne toutes les coproprietes en base.
 func (c *Client) ListCopropriete(ctx context.Context) ([]*domain.Copropriete, error) {
 	var rows []coproprieteRow
 	if err := c.do(ctx, http.MethodGet, "/copropriete?select=*", nil, &rows); err != nil {

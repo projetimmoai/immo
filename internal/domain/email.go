@@ -81,14 +81,17 @@ type Email struct {
 	ErreurTraitement     *string
 }
 
-// EmailPieceJointe est une pièce jointe d'un Email, stockée dans un service
-// externe (Google Drive ou autre) et référencée ici par son URL.
+// EmailPieceJointe est une pièce jointe d'un Email, stockée dans Supabase
+// Storage (cf. internal/storage, bucket storage.Bucket) et référencée ici
+// par son chemin d'objet — pas une URL permanente : le fichier n'étant pas
+// public, l'accès se fait via une URL signée temporaire générée à la
+// demande (storage.Client.SignedURL), jamais stockée en base.
 type EmailPieceJointe struct {
-	ID           int64
-	CreatedAt    time.Time
-	EmailID      int64
-	NomFichier   string
-	TypeMime     *string
-	TailleOctets *int64
-	URL          *string
+	ID             int64
+	CreatedAt      time.Time
+	EmailID        int64
+	NomFichier     string
+	TypeMime       *string
+	TailleOctets   *int64
+	CheminStockage *string // chemin de l'objet dans storage.Bucket
 }
