@@ -164,10 +164,9 @@ func coproprietesDeLots(lots []repository.LotAssocie) []repository.CoproprieteAs
 //
 // Ne va pas plus loin (détermination de la copropriété, puis routage) :
 // ces étapes suivantes ont chacune leurs propres dépendances (client
-// Claude dédié, liste des actions, dépôt pour la journalisation) qui ne se
-// prêtent pas à un simple enchaînement ici — c'est au code appelant
-// (worker, à venir) d'orchestrer DetermineCopropriete puis, si la
-// copropriété est identifiée (NouveauContexteRoutage), RouterEmail.
+// Claude dédié, dépôt pour la journalisation) qui ne se prêtent pas à un
+// simple enchaînement ici — c'est au code appelant (worker, à venir)
+// d'orchestrer DetermineCopropriete puis le routage par rôle (à venir).
 func TraiterMessage(ctx context.Context, repo contexteRepo, msg *gmailapi.Message) (*Contexte, error) {
 	return EnrichirExpediteur(ctx, repo, msg.From)
 }

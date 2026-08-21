@@ -20,9 +20,7 @@ func (r actionRow) toDomain() *domain.Action {
 	return &domain.Action{ID: r.ID, CreatedAt: r.CreatedAt, Description: r.Description}
 }
 
-// ListActions retourne toutes les actions possibles (table action),
-// utilisé pour construire la liste proposée à Claude lors du routage d'un
-// e-mail (cf. internal/email.RouterEmail).
+// ListActions retourne toutes les actions possibles (table action).
 func (c *Client) ListActions(ctx context.Context) ([]*domain.Action, error) {
 	var rows []actionRow
 	if err := c.do(ctx, http.MethodGet, "/action?select=*", nil, &rows); err != nil {

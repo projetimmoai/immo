@@ -1,10 +1,9 @@
 // Package claudeapi est la couche d'accès à l'API Claude (Anthropic),
 // utilisée pour la classification des e-mails (détermination de la
-// copropriété concernée, puis de l'action à appliquer — cf.
-// internal/email.DetermineCopropriete et RouterEmail). Contrairement à
-// internal/repository (Supabase) et internal/drive/internal/gmailapi
-// (Google), Anthropic fournit un SDK Go officiel — inutile de refaire du
-// REST à la main ici.
+// copropriété concernée — cf. internal/email.DetermineCopropriete).
+// Contrairement à internal/repository (Supabase) et
+// internal/drive/internal/gmailapi (Google), Anthropic fournit un SDK Go
+// officiel — inutile de refaire du REST à la main ici.
 package claudeapi
 
 import (
