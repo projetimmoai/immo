@@ -40,3 +40,24 @@ func (d *Date) UnmarshalJSON(data []byte) error {
 	d.Time = t
 	return nil
 }
+
+// dateToTimePtr convertit un *Date (lu depuis PostgREST) en *time.Time pour
+// le domaine (internal/domain), qui reste un time.Time simple — il n'a pas
+// à connaître le détail du format d'échange PostgREST pour les colonnes
+// "date".
+func dateToTimePtr(d *Date) *time.Time {
+	if d == nil {
+		return nil
+	}
+	t := d.Time
+	return &t
+}
+
+// timePtrToDate convertit un *time.Time du domaine en *Date pour l'envoyer
+// à PostgREST au format "YYYY-MM-DD" attendu par une colonne SQL "date".
+func timePtrToDate(t *time.Time) *Date {
+	if t == nil {
+		return nil
+	}
+	return &Date{Time: *t}
+}

@@ -18,10 +18,10 @@ type coproprieteRow struct {
 	AdresseCodePostal                 *string    `json:"adresse_code_postal"`
 	AdresseVille                      *string    `json:"adresse_ville"`
 	AdressePaysCode                   *string    `json:"adresse_pays_code"`
-	ExerciceDebut                     *time.Time `json:"exercice_debut"`
-	ExerciceFin                       *time.Time `json:"exercice_fin"`
+	ExerciceDebut                     *Date      `json:"exercice_debut"`
+	ExerciceFin                       *Date      `json:"exercice_fin"`
 	AppelChargesFrequenceID           *int64     `json:"appel_charges_frequence_id"`
-	AppelChargesDate                  *time.Time `json:"appel_charges_date"`
+	AppelChargesDate                  *Date      `json:"appel_charges_date"`
 	AppelChargesNumJoursAvantEcheance *int64     `json:"appel_charges_num_jours_avant_echeance"`
 	Nom                               *string    `json:"nom"`
 	AdresseRegion                     *string    `json:"adresse_region"`
@@ -30,7 +30,7 @@ type coproprieteRow struct {
 	ArreteComptableMois               *int64     `json:"arrete_comptable_mois"`
 	NumeroImmatriculation             *string    `json:"numero_immatriculation"`
 	NumeroMandat                      *string    `json:"numero_mandat"`
-	MandatDateDebut                   *time.Time `json:"mandat_date_debut"`
+	MandatDateDebut                   *Date      `json:"mandat_date_debut"`
 	MandatDureeEnMois                 *int64     `json:"mandat_duree_en_mois"`
 	CodeICS                           *string    `json:"code_ics"`
 	IBAN                              *string    `json:"iban"`
@@ -49,10 +49,10 @@ func (r coproprieteRow) toDomain() *domain.Copropriete {
 		AdresseCodePostal:                 r.AdresseCodePostal,
 		AdresseVille:                      r.AdresseVille,
 		AdressePaysCode:                   r.AdressePaysCode,
-		ExerciceDebut:                     r.ExerciceDebut,
-		ExerciceFin:                       r.ExerciceFin,
+		ExerciceDebut:                     dateToTimePtr(r.ExerciceDebut),
+		ExerciceFin:                       dateToTimePtr(r.ExerciceFin),
 		AppelChargesFrequenceID:           r.AppelChargesFrequenceID,
-		AppelChargesDate:                  r.AppelChargesDate,
+		AppelChargesDate:                  dateToTimePtr(r.AppelChargesDate),
 		AppelChargesNumJoursAvantEcheance: r.AppelChargesNumJoursAvantEcheance,
 		Nom:                               r.Nom,
 		AdresseRegion:                     r.AdresseRegion,
@@ -61,7 +61,7 @@ func (r coproprieteRow) toDomain() *domain.Copropriete {
 		ArreteComptableMois:               r.ArreteComptableMois,
 		NumeroImmatriculation:             r.NumeroImmatriculation,
 		NumeroMandat:                      r.NumeroMandat,
-		MandatDateDebut:                   r.MandatDateDebut,
+		MandatDateDebut:                   dateToTimePtr(r.MandatDateDebut),
 		MandatDureeEnMois:                 r.MandatDureeEnMois,
 		CodeICS:                           r.CodeICS,
 		IBAN:                              r.IBAN,
@@ -76,29 +76,29 @@ func (r coproprieteRow) toDomain() *domain.Copropriete {
 // uniquement les colonnes fournies par l'appelant (id/created_at/reference
 // sont générés par la base — reference via une séquence dédiée, cf. migration).
 type coproprieteInsert struct {
-	SyndicID                          *int64     `json:"syndic_id,omitempty"`
-	EstSyndic                         *bool      `json:"est_syndic,omitempty"`
-	AdresseCodePostal                 *string    `json:"adresse_code_postal,omitempty"`
-	AdresseVille                      *string    `json:"adresse_ville,omitempty"`
-	AdressePaysCode                   *string    `json:"adresse_pays_code,omitempty"`
-	ExerciceDebut                     *time.Time `json:"exercice_debut,omitempty"`
-	ExerciceFin                       *time.Time `json:"exercice_fin,omitempty"`
-	AppelChargesFrequenceID           *int64     `json:"appel_charges_frequence_id,omitempty"`
-	AppelChargesDate                  *time.Time `json:"appel_charges_date,omitempty"`
-	AppelChargesNumJoursAvantEcheance *int64     `json:"appel_charges_num_jours_avant_echeance,omitempty"`
-	Nom                               *string    `json:"nom,omitempty"`
-	AdresseRegion                     *string    `json:"adresse_region,omitempty"`
-	ClesRepartition                   *float32   `json:"cles_repartition,omitempty"`
-	ArreteComptableJour               *int64     `json:"arrete_comptable_jour,omitempty"`
-	ArreteComptableMois               *int64     `json:"arrete_comptable_mois,omitempty"`
-	NumeroImmatriculation             *string    `json:"numero_immatriculation,omitempty"`
-	NumeroMandat                      *string    `json:"numero_mandat,omitempty"`
-	MandatDateDebut                   *time.Time `json:"mandat_date_debut,omitempty"`
-	MandatDureeEnMois                 *int64     `json:"mandat_duree_en_mois,omitempty"`
-	CodeICS                           *string    `json:"code_ics,omitempty"`
-	IBAN                              *string    `json:"iban,omitempty"`
-	BIC                               *string    `json:"bic,omitempty"`
-	CreePar                           *int64     `json:"cree_par,omitempty"`
+	SyndicID                          *int64   `json:"syndic_id,omitempty"`
+	EstSyndic                         *bool    `json:"est_syndic,omitempty"`
+	AdresseCodePostal                 *string  `json:"adresse_code_postal,omitempty"`
+	AdresseVille                      *string  `json:"adresse_ville,omitempty"`
+	AdressePaysCode                   *string  `json:"adresse_pays_code,omitempty"`
+	ExerciceDebut                     *Date    `json:"exercice_debut,omitempty"`
+	ExerciceFin                       *Date    `json:"exercice_fin,omitempty"`
+	AppelChargesFrequenceID           *int64   `json:"appel_charges_frequence_id,omitempty"`
+	AppelChargesDate                  *Date    `json:"appel_charges_date,omitempty"`
+	AppelChargesNumJoursAvantEcheance *int64   `json:"appel_charges_num_jours_avant_echeance,omitempty"`
+	Nom                               *string  `json:"nom,omitempty"`
+	AdresseRegion                     *string  `json:"adresse_region,omitempty"`
+	ClesRepartition                   *float32 `json:"cles_repartition,omitempty"`
+	ArreteComptableJour               *int64   `json:"arrete_comptable_jour,omitempty"`
+	ArreteComptableMois               *int64   `json:"arrete_comptable_mois,omitempty"`
+	NumeroImmatriculation             *string  `json:"numero_immatriculation,omitempty"`
+	NumeroMandat                      *string  `json:"numero_mandat,omitempty"`
+	MandatDateDebut                   *Date    `json:"mandat_date_debut,omitempty"`
+	MandatDureeEnMois                 *int64   `json:"mandat_duree_en_mois,omitempty"`
+	CodeICS                           *string  `json:"code_ics,omitempty"`
+	IBAN                              *string  `json:"iban,omitempty"`
+	BIC                               *string  `json:"bic,omitempty"`
+	CreePar                           *int64   `json:"cree_par,omitempty"`
 }
 
 // InsertCopropriete insère une nouvelle Copropriete et retourne la ligne
@@ -110,10 +110,10 @@ func (c *Client) InsertCopropriete(ctx context.Context, cop *domain.Copropriete)
 		AdresseCodePostal:                 cop.AdresseCodePostal,
 		AdresseVille:                      cop.AdresseVille,
 		AdressePaysCode:                   cop.AdressePaysCode,
-		ExerciceDebut:                     cop.ExerciceDebut,
-		ExerciceFin:                       cop.ExerciceFin,
+		ExerciceDebut:                     timePtrToDate(cop.ExerciceDebut),
+		ExerciceFin:                       timePtrToDate(cop.ExerciceFin),
 		AppelChargesFrequenceID:           cop.AppelChargesFrequenceID,
-		AppelChargesDate:                  cop.AppelChargesDate,
+		AppelChargesDate:                  timePtrToDate(cop.AppelChargesDate),
 		AppelChargesNumJoursAvantEcheance: cop.AppelChargesNumJoursAvantEcheance,
 		Nom:                               cop.Nom,
 		AdresseRegion:                     cop.AdresseRegion,
@@ -122,7 +122,7 @@ func (c *Client) InsertCopropriete(ctx context.Context, cop *domain.Copropriete)
 		ArreteComptableMois:               cop.ArreteComptableMois,
 		NumeroImmatriculation:             cop.NumeroImmatriculation,
 		NumeroMandat:                      cop.NumeroMandat,
-		MandatDateDebut:                   cop.MandatDateDebut,
+		MandatDateDebut:                   timePtrToDate(cop.MandatDateDebut),
 		MandatDureeEnMois:                 cop.MandatDureeEnMois,
 		CodeICS:                           cop.CodeICS,
 		IBAN:                              cop.IBAN,

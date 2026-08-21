@@ -12,14 +12,14 @@ import (
 // conseilSyndicalMandatRow est la représentation JSON d'une ligne de la
 // table conseil_syndical_mandat.
 type conseilSyndicalMandatRow struct {
-	ID            int64      `json:"id"`
-	CreatedAt     time.Time  `json:"created_at"`
-	PersonneID    *int64     `json:"personne_id"`
-	CoproprieteID *int64     `json:"copropriete_id"`
-	DateDebut     *time.Time `json:"date_debut"`
-	DateFin       *time.Time `json:"date_fin"`
-	StatutID      *int64     `json:"statut_id"`
-	CreePar       *int64     `json:"cree_par"`
+	ID            int64     `json:"id"`
+	CreatedAt     time.Time `json:"created_at"`
+	PersonneID    *int64    `json:"personne_id"`
+	CoproprieteID *int64    `json:"copropriete_id"`
+	DateDebut     *Date     `json:"date_debut"`
+	DateFin       *Date     `json:"date_fin"`
+	StatutID      *int64    `json:"statut_id"`
+	CreePar       *int64    `json:"cree_par"`
 }
 
 func (r conseilSyndicalMandatRow) toDomain() *domain.ConseilSyndicalMandat {
@@ -28,8 +28,8 @@ func (r conseilSyndicalMandatRow) toDomain() *domain.ConseilSyndicalMandat {
 		CreatedAt:     r.CreatedAt,
 		PersonneID:    r.PersonneID,
 		CoproprieteID: r.CoproprieteID,
-		DateDebut:     r.DateDebut,
-		DateFin:       r.DateFin,
+		DateDebut:     dateToTimePtr(r.DateDebut),
+		DateFin:       dateToTimePtr(r.DateFin),
 		StatutID:      r.StatutID,
 		CreePar:       r.CreePar,
 	}
@@ -39,12 +39,12 @@ func (r conseilSyndicalMandatRow) toDomain() *domain.ConseilSyndicalMandat {
 // ConseilSyndicalMandat : uniquement les colonnes fournies par l'appelant
 // (id/created_at sont générés par la base).
 type conseilSyndicalMandatInsert struct {
-	PersonneID    *int64     `json:"personne_id,omitempty"`
-	CoproprieteID *int64     `json:"copropriete_id,omitempty"`
-	DateDebut     *time.Time `json:"date_debut,omitempty"`
-	DateFin       *time.Time `json:"date_fin,omitempty"`
-	StatutID      *int64     `json:"statut_id,omitempty"`
-	CreePar       *int64     `json:"cree_par,omitempty"`
+	PersonneID    *int64 `json:"personne_id,omitempty"`
+	CoproprieteID *int64 `json:"copropriete_id,omitempty"`
+	DateDebut     *Date  `json:"date_debut,omitempty"`
+	DateFin       *Date  `json:"date_fin,omitempty"`
+	StatutID      *int64 `json:"statut_id,omitempty"`
+	CreePar       *int64 `json:"cree_par,omitempty"`
 }
 
 // InsertConseilSyndicalMandat insère un nouveau ConseilSyndicalMandat et
@@ -55,8 +55,8 @@ func (c *Client) InsertConseilSyndicalMandat(ctx context.Context, m *domain.Cons
 	payload := []conseilSyndicalMandatInsert{{
 		PersonneID:    m.PersonneID,
 		CoproprieteID: m.CoproprieteID,
-		DateDebut:     m.DateDebut,
-		DateFin:       m.DateFin,
+		DateDebut:     timePtrToDate(m.DateDebut),
+		DateFin:       timePtrToDate(m.DateFin),
 		StatutID:      m.StatutID,
 		CreePar:       m.CreePar,
 	}}
@@ -83,15 +83,15 @@ func (c *Client) DeleteConseilSyndicalMandat(ctx context.Context, id int64) erro
 // conseilSyndicalPresidentRow est la représentation JSON d'une ligne de la
 // table conseil_syndical_president.
 type conseilSyndicalPresidentRow struct {
-	ID            int64      `json:"id"`
-	CreatedAt     time.Time  `json:"created_at"`
-	PersonneID    *int64     `json:"personne_id"`
-	CoproprieteID *int64     `json:"copropriete_id"`
-	DateDebut     *time.Time `json:"date_debut"`
-	DateFin       *time.Time `json:"date_fin"`
-	EluEnAG       *bool      `json:"elu_en_ag"`
-	EluParCS      *bool      `json:"elu_par_cs"`
-	CreePar       *int64     `json:"cree_par"`
+	ID            int64     `json:"id"`
+	CreatedAt     time.Time `json:"created_at"`
+	PersonneID    *int64    `json:"personne_id"`
+	CoproprieteID *int64    `json:"copropriete_id"`
+	DateDebut     *Date     `json:"date_debut"`
+	DateFin       *Date     `json:"date_fin"`
+	EluEnAG       *bool     `json:"elu_en_ag"`
+	EluParCS      *bool     `json:"elu_par_cs"`
+	CreePar       *int64    `json:"cree_par"`
 }
 
 func (r conseilSyndicalPresidentRow) toDomain() *domain.ConseilSyndicalPresident {
@@ -100,8 +100,8 @@ func (r conseilSyndicalPresidentRow) toDomain() *domain.ConseilSyndicalPresident
 		CreatedAt:     r.CreatedAt,
 		PersonneID:    r.PersonneID,
 		CoproprieteID: r.CoproprieteID,
-		DateDebut:     r.DateDebut,
-		DateFin:       r.DateFin,
+		DateDebut:     dateToTimePtr(r.DateDebut),
+		DateFin:       dateToTimePtr(r.DateFin),
 		EluEnAG:       r.EluEnAG,
 		EluParCS:      r.EluParCS,
 		CreePar:       r.CreePar,
@@ -112,13 +112,13 @@ func (r conseilSyndicalPresidentRow) toDomain() *domain.ConseilSyndicalPresident
 // ConseilSyndicalPresident : uniquement les colonnes fournies par
 // l'appelant (id/created_at sont générés par la base).
 type conseilSyndicalPresidentInsert struct {
-	PersonneID    *int64     `json:"personne_id,omitempty"`
-	CoproprieteID *int64     `json:"copropriete_id,omitempty"`
-	DateDebut     *time.Time `json:"date_debut,omitempty"`
-	DateFin       *time.Time `json:"date_fin,omitempty"`
-	EluEnAG       *bool      `json:"elu_en_ag,omitempty"`
-	EluParCS      *bool      `json:"elu_par_cs,omitempty"`
-	CreePar       *int64     `json:"cree_par,omitempty"`
+	PersonneID    *int64 `json:"personne_id,omitempty"`
+	CoproprieteID *int64 `json:"copropriete_id,omitempty"`
+	DateDebut     *Date  `json:"date_debut,omitempty"`
+	DateFin       *Date  `json:"date_fin,omitempty"`
+	EluEnAG       *bool  `json:"elu_en_ag,omitempty"`
+	EluParCS      *bool  `json:"elu_par_cs,omitempty"`
+	CreePar       *int64 `json:"cree_par,omitempty"`
 }
 
 // InsertConseilSyndicalPresident insère un nouveau ConseilSyndicalPresident
@@ -127,8 +127,8 @@ func (c *Client) InsertConseilSyndicalPresident(ctx context.Context, p *domain.C
 	payload := []conseilSyndicalPresidentInsert{{
 		PersonneID:    p.PersonneID,
 		CoproprieteID: p.CoproprieteID,
-		DateDebut:     p.DateDebut,
-		DateFin:       p.DateFin,
+		DateDebut:     timePtrToDate(p.DateDebut),
+		DateFin:       timePtrToDate(p.DateFin),
 		EluEnAG:       p.EluEnAG,
 		EluParCS:      p.EluParCS,
 		CreePar:       p.CreePar,

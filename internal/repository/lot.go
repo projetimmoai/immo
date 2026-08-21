@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 )
 
 // LotAssocie décrit un lot associé à une personne (propriétaire, gestionnaire
@@ -19,8 +18,8 @@ type LotAssocie struct {
 	EstOccupant          *bool
 	EstGestionnaire      *bool
 	EstIndivision        *bool
-	Debut                *time.Time
-	Fin                  *time.Time
+	Debut                *Date // colonne SQL "date" (pas "timestamptz"), cf. Date
+	Fin                  *Date
 	LotID                int64
 	LotNumero            *string
 	LotReference         string
@@ -32,13 +31,13 @@ type LotAssocie struct {
 // lotPersonneMapRow reflète la forme de la réponse JSON avec ressources
 // imbriquées de ListLotsParPersonne.
 type lotPersonneMapRow struct {
-	ID              int64      `json:"id"`
-	EstProprietaire *bool      `json:"est_proprietaire"`
-	EstOccupant     *bool      `json:"est_occupant"`
-	EstGestionnaire *bool      `json:"est_gestionnaire"`
-	EstIndivision   *bool      `json:"est_indivision"`
-	Debut           *time.Time `json:"debut"`
-	Fin             *time.Time `json:"fin"`
+	ID              int64 `json:"id"`
+	EstProprietaire *bool `json:"est_proprietaire"`
+	EstOccupant     *bool `json:"est_occupant"`
+	EstGestionnaire *bool `json:"est_gestionnaire"`
+	EstIndivision   *bool `json:"est_indivision"`
+	Debut           *Date `json:"debut"`
+	Fin             *Date `json:"fin"`
 	Lot             *struct {
 		ID        int64   `json:"id"`
 		Numero    *string `json:"numero"`
