@@ -96,3 +96,9 @@ func (c *Client) SinistreStatutID(ctx context.Context, description string) (int6
 func (c *Client) LogTypeID(ctx context.Context, description string) (int64, error) {
 	return c.lookupReferenceID(ctx, "log_type", description)
 }
+
+// ConseilSyndicalMandatStatutID retrouve l'ID de conseil_syndical_mandat_statut
+// pour la description donnée (voir les constantes domain.ConseilSyndicalMandatStatut*).
+func (c *Client) ConseilSyndicalMandatStatutID(ctx context.Context, description string) (int64, error) {
+	return c.lookupReferenceID(ctx, "conseil_syndical_mandat_statut", description)
+}
