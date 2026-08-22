@@ -23,6 +23,7 @@ type incidentRepo interface {
 	InsertIncident(ctx context.Context, in repository.CreerIncidentInput) (*domain.Ticket, *domain.Incident, error)
 	FindCoproprieteByID(ctx context.Context, id int64) (*domain.Copropriete, error)
 	FindContratActif(ctx context.Context, coproprieteID, categorieTechniqueID int64) (*repository.ContratActif, error)
+	FindPrestatairesRepertoire(ctx context.Context, ville string, categorieTechniqueID int64) ([]int64, error)
 	SetIncidentPrestataire(ctx context.Context, ticketID, prestataireID int64) error
 	UpdateTicketStatut(ctx context.Context, ticketID, statutID int64) error
 	SetIncidentRapportIntervention(ctx context.Context, ticketID int64, rapport string) error
@@ -75,21 +76,22 @@ type incidentQualifieur interface {
 // confirmation occupant ou jugée inutile), facture et mise en paiement
 // gatée sur la vérification, rapprochement comptable et clôture.
 //
-// Mise en concurrence (seuil B) simplifiée : un seul prestataire est jamais
-// disponible automatiquement (contrat actif, pas de répertoire par zone
-// d'intervention), donc dès que ≥2 devis distincts sont requis, le ticket
-// reste en attente d'un gestionnaire humain plutôt que d'inventer un second
-// prestataire.
+// Mise en concurrence (seuil B) : un devis est demandé à chaque
+// prestataire candidat trouvé (contrat actif + répertoire par catégorie
+// technique et zone d'intervention, cf. candidatsPrestataires) — jamais
+// exactement deux, la loi exigeant un minimum, pas un maximum. Si moins de
+// deux candidats distincts existent alors que la mise en concurrence est
+// requise, le ticket reste en attente d'un gestionnaire humain plutôt que
+// d'inventer un second prestataire.
 //
 // Volontairement hors de cette tranche (laissés pour un prochain jalon) :
 // résolution effective d'un litige (phase 5.3.5 s'arrête à l'état
-// "litige", traité par un futur graphe dédié), sélection d'un
-// prestataire dans un répertoire par zone d'intervention (pas encore
-// modélisé), rédaction réelle des communications (demande de devis,
-// d'avis, résolution AG, réclamation — de simples enregistrements pour
-// l'instant, aucun envoi réel), et l'automatisation des relances (aucun
-// worker périodique pour l'instant : les étapes "en attente" sont
-// enregistrées mais ne sont pas relancées automatiquement).
+// "litige", traité par un futur graphe dédié), rédaction réelle des
+// communications (demande de devis, d'avis, résolution AG, réclamation —
+// de simples enregistrements pour l'instant, aucun envoi réel), et
+// l'automatisation des relances (aucun worker périodique pour l'instant :
+// les étapes "en attente" sont enregistrées mais ne sont pas relancées
+// automatiquement).
 type IncidentService struct {
 	Repo   incidentRepo
 	Claude incidentQualifieur
@@ -112,13 +114,14 @@ type CreerIncidentInput struct {
 // et le début de la phase 3 (sélection du prestataire, comparaison au
 // plafond D) du graphe.
 //
-// Sélection du prestataire simplifiée pour cette tranche (cf.
-// repository.FindContratActif) : seul un contrat de maintenance actif est
-// cherché — pas de répertoire de prestataires par zone d'intervention. Si
-// aucun contrat actif n'existe, le ticket reste en statut
-// "en_attente_gestionnaire" : un humain doit reprendre la main. Si le
-// montant estimé dépasse le plafond D, la chaîne des seuils légaux prend le
-// relais (cf. demarrerDevis).
+// Sélection du prestataire (cf. candidatsPrestataires) : contrat de
+// maintenance actif d'abord, puis répertoire de prestataires (catégorie
+// technique + zone d'intervention). Si aucun des deux ne donne de
+// candidat, le ticket reste en statut "en_attente_gestionnaire" : un
+// humain doit reprendre la main. Si le montant estimé dépasse le plafond
+// D, la chaîne des seuils légaux prend le relais (cf. demarrerDevis),
+// jusqu'à la mise en concurrence réelle (seuil B) si assez de candidats
+// distincts ont été trouvés.
 func (s *IncidentService) CreerIncident(ctx context.Context, in CreerIncidentInput) (*domain.Ticket, *domain.Incident, error) {
 	if in.SourceID <= 0 {
 		return nil, nil, fmt.Errorf("service: création incident: source_id est obligatoire")
@@ -186,11 +189,12 @@ func (s *IncidentService) CreerIncident(ctx context.Context, in CreerIncidentInp
 }
 
 // selectionnerPrestataireEtDemarrer couvre la phase 3.3 (sélection du
-// prestataire, simplifiée : contrat actif seulement) puis la comparaison au
-// plafond D (phase 3.4.1). Ne retourne une erreur que pour un problème
-// technique (accès base) — l'absence de prestataire ou un montant au-delà
-// du plafond D ne sont pas des erreurs : ils laissent le ticket en attente
-// d'un gestionnaire humain (cf. doc du champ StatutID correspondant).
+// prestataire : contrat actif, puis répertoire par catégorie technique et
+// zone d'intervention) puis la comparaison au plafond D (phase 3.4.1). Ne
+// retourne une erreur que pour un problème technique (accès base) —
+// l'absence de prestataire ou un montant au-delà du plafond D ne sont pas
+// des erreurs : ils laissent le ticket en attente d'un gestionnaire humain
+// (cf. doc du champ StatutID correspondant).
 func (s *IncidentService) selectionnerPrestataireEtDemarrer(ctx context.Context, ticket *domain.Ticket, incident *domain.Incident, categorieTechniqueID *int64) error {
 	statutAttenteGestionnaireID, err := s.Repo.TicketStatutID(ctx, domain.TicketStatutEnAttenteGestionnaire)
 	if err != nil {
@@ -198,42 +202,78 @@ func (s *IncidentService) selectionnerPrestataireEtDemarrer(ctx context.Context,
 	}
 
 	if categorieTechniqueID == nil {
-		// Catégorie indéterminée : impossible de chercher un contrat par
+		// Catégorie indéterminée : impossible de chercher un prestataire par
 		// catégorie technique — recherche humaine du prestataire.
 		return s.Repo.UpdateTicketStatut(ctx, ticket.ID, statutAttenteGestionnaireID)
 	}
 
-	contrat, err := s.Repo.FindContratActif(ctx, ticket.CoproprieteID, *categorieTechniqueID)
-	if err != nil {
-		return fmt.Errorf("recherche d'un contrat actif: %w", err)
-	}
-	if contrat == nil {
-		// Phase 3.3.3 : aucun prestataire du répertoire ne correspond (ici,
-		// aucun contrat actif) → recherche humaine.
-		return s.Repo.UpdateTicketStatut(ctx, ticket.ID, statutAttenteGestionnaireID)
-	}
-	if err := s.Repo.SetIncidentPrestataire(ctx, ticket.ID, contrat.EntrepriseID); err != nil {
-		return fmt.Errorf("enregistrement du prestataire retenu: %w", err)
-	}
-	incident.PrestataireID = &contrat.EntrepriseID
-
-	// Phase 3.4.1 : comparaison au plafond D (ordre de service).
 	cop, err := s.Repo.FindCoproprieteByID(ctx, ticket.CoproprieteID)
 	if err != nil {
 		return fmt.Errorf("chargement de la copropriete: %w", err)
 	}
+
+	candidats, err := s.candidatsPrestataires(ctx, ticket.CoproprieteID, *categorieTechniqueID, cop)
+	if err != nil {
+		return fmt.Errorf("sélection du prestataire: %w", err)
+	}
+	if len(candidats) == 0 {
+		// Phase 3.3.3 : ni contrat actif, ni répertoire (compétence + zone
+		// d'intervention) ne correspond → recherche humaine.
+		return s.Repo.UpdateTicketStatut(ctx, ticket.ID, statutAttenteGestionnaireID)
+	}
+	if err := s.Repo.SetIncidentPrestataire(ctx, ticket.ID, candidats[0]); err != nil {
+		return fmt.Errorf("enregistrement du prestataire retenu: %w", err)
+	}
+	incident.PrestataireID = &candidats[0]
+
+	// Phase 3.4.1 : comparaison au plafond D (ordre de service).
 	depasse := cop == nil || cop.PlafondOrdreServiceCentimes == nil ||
 		incident.MontantEstimeCentimes == nil ||
 		*incident.MontantEstimeCentimes > *cop.PlafondOrdreServiceCentimes
 	if depasse {
 		// Au-delà du plafond D (ou plafond/montant inconnu) : un devis est
 		// nécessaire (phase 3.4.2 et suivantes).
-		return s.demarrerDevis(ctx, ticket, cop, incident)
+		return s.demarrerDevis(ctx, ticket, cop, incident, candidats)
 	}
 
 	// Sous le plafond D : intervention immédiate, sans devis préalable
 	// (phase 3.4.1) → suivi de l'intervention, en attente du prestataire.
 	return s.passerEnSuiviIntervention(ctx, ticket.ID)
+}
+
+// candidatsPrestataires couvre la phase 3.3.1-3.3.2 : le contrat actif (s'il
+// existe) est toujours le premier candidat retourné — c'est lui qui devient
+// le prestataire "principal" de l'incident (cf. Incident.PrestataireID) —
+// suivi des prestataires du répertoire correspondant à la catégorie
+// technique et à la ville de la copropriété, dédupliqués. Sans ville
+// connue pour la copropriété, le répertoire n'est pas interrogé (rien à
+// comparer) : seul le contrat actif, s'il existe, est candidat.
+func (s *IncidentService) candidatsPrestataires(ctx context.Context, coproprieteID, categorieTechniqueID int64, cop *domain.Copropriete) ([]int64, error) {
+	var candidats []int64
+	dejaCandidat := make(map[int64]bool)
+
+	contrat, err := s.Repo.FindContratActif(ctx, coproprieteID, categorieTechniqueID)
+	if err != nil {
+		return nil, fmt.Errorf("recherche d'un contrat actif: %w", err)
+	}
+	if contrat != nil {
+		candidats = append(candidats, contrat.EntrepriseID)
+		dejaCandidat[contrat.EntrepriseID] = true
+	}
+
+	if cop != nil && cop.AdresseVille != nil && *cop.AdresseVille != "" {
+		repertoire, err := s.Repo.FindPrestatairesRepertoire(ctx, *cop.AdresseVille, categorieTechniqueID)
+		if err != nil {
+			return nil, fmt.Errorf("recherche dans le répertoire de prestataires: %w", err)
+		}
+		for _, personneID := range repertoire {
+			if !dejaCandidat[personneID] {
+				dejaCandidat[personneID] = true
+				candidats = append(candidats, personneID)
+			}
+		}
+	}
+	return candidats, nil
 }
 
 // passerEnSuiviIntervention fait passer le ticket en phase 4 (suivi de
@@ -251,24 +291,31 @@ func (s *IncidentService) passerEnSuiviIntervention(ctx context.Context, ticketI
 
 // demarrerDevis couvre la phase 3.4.2-3.4.6 : comparaison au seuil B (mise
 // en concurrence) pour savoir combien de devis sont requis, puis demande de
-// devis. La mise en concurrence réelle (≥2 devis de prestataires distincts)
-// n'est pas automatisable dans cette tranche (cf. doc de IncidentService) :
-// un montant inconnu, un seuil B franchi, ou l'absence de prestataire
-// laissent le ticket en attente d'un gestionnaire humain.
-func (s *IncidentService) demarrerDevis(ctx context.Context, ticket *domain.Ticket, cop *domain.Copropriete, incident *domain.Incident) error {
+// devis — un seul au prestataire principal en-dessous du seuil B, un à
+// chaque candidat trouvé (cf. candidatsPrestataires) au-delà, jamais
+// seulement deux : la loi exige au moins deux devis d'entreprises
+// distinctes, pas exactement deux. Si moins de deux candidats distincts
+// sont disponibles alors que la mise en concurrence est requise, ou si le
+// montant est inconnu, le ticket reste en attente d'un gestionnaire humain.
+func (s *IncidentService) demarrerDevis(ctx context.Context, ticket *domain.Ticket, cop *domain.Copropriete, incident *domain.Incident, candidats []int64) error {
 	statutAttenteGestionnaireID, err := s.Repo.TicketStatutID(ctx, domain.TicketStatutEnAttenteGestionnaire)
 	if err != nil {
 		return fmt.Errorf("résolution du statut en_attente_gestionnaire: %w", err)
 	}
-	if incident.MontantEstimeCentimes == nil || incident.PrestataireID == nil {
+	if incident.MontantEstimeCentimes == nil {
 		return s.Repo.UpdateTicketStatut(ctx, ticket.ID, statutAttenteGestionnaireID)
 	}
 	miseEnConcurrenceRequise := cop != nil && cop.SeuilBMiseEnConcurrenceCentimes != nil &&
 		*incident.MontantEstimeCentimes > *cop.SeuilBMiseEnConcurrenceCentimes
+
+	nbDevisRequis := 1
 	if miseEnConcurrenceRequise {
-		// Seuil B franchi : ≥2 devis de prestataires distincts requis — la
-		// sélection automatique (contrat actif) n'en fournit qu'un seul.
-		return s.Repo.UpdateTicketStatut(ctx, ticket.ID, statutAttenteGestionnaireID)
+		nbDevisRequis = len(candidats)
+		if nbDevisRequis < 2 {
+			// Seuil B franchi : ≥2 devis de prestataires distincts requis —
+			// pas assez de candidats trouvés (contrat + répertoire).
+			return s.Repo.UpdateTicketStatut(ctx, ticket.ID, statutAttenteGestionnaireID)
+		}
 	}
 
 	statutEnAttenteID, err := s.Repo.DevisStatutID(ctx, domain.DevisStatutEnAttente)
@@ -276,20 +323,24 @@ func (s *IncidentService) demarrerDevis(ctx context.Context, ticket *domain.Tick
 		return fmt.Errorf("résolution du statut devis en_attente: %w", err)
 	}
 	maintenant := time.Now().UTC()
-	if _, err := s.Repo.InsertDevis(ctx, &domain.Devis{
-		TicketID:      ticket.ID,
-		PrestataireID: *incident.PrestataireID,
-		StatutID:      statutEnAttenteID,
-		DateDemande:   &maintenant,
-	}); err != nil {
-		return fmt.Errorf("demande de devis: %w", err)
+	for _, prestataireID := range candidats[:nbDevisRequis] {
+		if _, err := s.Repo.InsertDevis(ctx, &domain.Devis{
+			TicketID:      ticket.ID,
+			PrestataireID: prestataireID,
+			StatutID:      statutEnAttenteID,
+			DateDemande:   &maintenant,
+		}); err != nil {
+			return fmt.Errorf("demande de devis (prestataire_id=%d): %w", prestataireID, err)
+		}
 	}
 	return s.passerEnSuiviIntervention(ctx, ticket.ID)
 }
 
 // EnregistrerDevisRecu couvre la phase 3.4.6 : réception et extraction du
-// montant d'un devis, puis déclenche la suite de la chaîne de décision (cf.
-// appliquerDecisionApresDevis).
+// montant d'un devis. En mise en concurrence (plusieurs devis demandés
+// pour ce ticket), la chaîne de décision n'est déclenchée qu'une fois tous
+// les devis reçus (cf. attendreTousLesDevis) — recevoir un seul devis sur
+// plusieurs ne suffit pas à comparer les offres.
 func (s *IncidentService) EnregistrerDevisRecu(ctx context.Context, ticketID, devisID, montantCentimes int64) error {
 	statutRecuID, err := s.Repo.DevisStatutID(ctx, domain.DevisStatutRecu)
 	if err != nil {
@@ -298,10 +349,81 @@ func (s *IncidentService) EnregistrerDevisRecu(ctx context.Context, ticketID, de
 	if err := s.Repo.EnregistrerReceptionDevis(ctx, devisID, statutRecuID, montantCentimes, time.Now().UTC()); err != nil {
 		return fmt.Errorf("service: réception devis id=%d: %w", devisID, err)
 	}
-	if err := s.appliquerDecisionApresDevis(ctx, ticketID, montantCentimes); err != nil {
+
+	tousRecus, montantRetenu, err := s.attendreTousLesDevis(ctx, ticketID)
+	if err != nil {
+		return fmt.Errorf("service: réception devis id=%d: %w", devisID, err)
+	}
+	if !tousRecus {
+		// Au moins un autre devis demandé pour ce ticket est encore en
+		// attente : la comparaison (et donc la suite de la décision)
+		// attend que tous soient arrivés.
+		return nil
+	}
+	if err := s.appliquerDecisionApresDevis(ctx, ticketID, montantRetenu); err != nil {
 		return fmt.Errorf("service: réception devis id=%d: décision: %w", devisID, err)
 	}
 	return nil
+}
+
+// attendreTousLesDevis vérifie si tous les devis demandés pour un ticket
+// ont été reçus (mise en concurrence, seuil B — ou simplement l'unique
+// devis du cas courant, qui suit le même chemin). Tant qu'il en reste au
+// moins un "en_attente", la comparaison ne peut pas avoir lieu. Une fois
+// tous reçus, ne garde au statut "recu" que le moins-disant — les autres
+// passent "rejete" — pour que la suite de la chaîne (cf. findDevisRecu)
+// n'ait plus jamais qu'un seul devis à considérer, qu'il y en ait eu 1, 2
+// ou N au départ.
+func (s *IncidentService) attendreTousLesDevis(ctx context.Context, ticketID int64) (tousRecus bool, montantRetenu int64, err error) {
+	statutEnAttenteID, err := s.Repo.DevisStatutID(ctx, domain.DevisStatutEnAttente)
+	if err != nil {
+		return false, 0, fmt.Errorf("résolution du statut devis en_attente: %w", err)
+	}
+	statutRecuID, err := s.Repo.DevisStatutID(ctx, domain.DevisStatutRecu)
+	if err != nil {
+		return false, 0, fmt.Errorf("résolution du statut devis recu: %w", err)
+	}
+	statutRejeteID, err := s.Repo.DevisStatutID(ctx, domain.DevisStatutRejete)
+	if err != nil {
+		return false, 0, fmt.Errorf("résolution du statut devis rejete: %w", err)
+	}
+
+	liste, err := s.Repo.ListDevisByTicket(ctx, ticketID)
+	if err != nil {
+		return false, 0, fmt.Errorf("listage des devis: %w", err)
+	}
+
+	var recus []*domain.Devis
+	for _, d := range liste {
+		if d.StatutID == statutEnAttenteID {
+			return false, 0, nil
+		}
+		if d.StatutID == statutRecuID {
+			recus = append(recus, d)
+		}
+	}
+	if len(recus) == 0 {
+		return false, 0, fmt.Errorf("aucun devis reçu pour le ticket_id=%d", ticketID)
+	}
+
+	moinsDisant := recus[0]
+	for _, d := range recus[1:] {
+		if d.MontantCentimes != nil && (moinsDisant.MontantCentimes == nil || *d.MontantCentimes < *moinsDisant.MontantCentimes) {
+			moinsDisant = d
+		}
+	}
+	if moinsDisant.MontantCentimes == nil {
+		return false, 0, fmt.Errorf("devis id=%d sans montant enregistré", moinsDisant.ID)
+	}
+	for _, d := range recus {
+		if d.ID == moinsDisant.ID {
+			continue
+		}
+		if err := s.Repo.MarquerDevisStatut(ctx, d.ID, statutRejeteID); err != nil {
+			return false, 0, fmt.Errorf("rejet du devis id=%d (mise en concurrence, non retenu): %w", d.ID, err)
+		}
+	}
+	return true, *moinsDisant.MontantCentimes, nil
 }
 
 // appliquerDecisionApresDevis couvre la phase 3.4.7-3.4.17 : une fois le

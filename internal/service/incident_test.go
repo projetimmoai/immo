@@ -55,6 +55,7 @@ type fakeIncidentRepo struct {
 	urgences     []domain.NiveauUrgence
 	copropriete  *domain.Copropriete
 	contratActif *repository.ContratActif
+	repertoire   []int64                           // FindPrestatairesRepertoire retourne toujours ceci, quels que soient ville/catégorie
 	delegation   *domain.ConseilSyndicalDelegation // simplifié : actif dès qu'il couvre le montant, pas de vraies dates
 
 	prochainTicketID       int64
@@ -159,6 +160,10 @@ func (f *fakeIncidentRepo) FindCoproprieteByID(_ context.Context, _ int64) (*dom
 
 func (f *fakeIncidentRepo) FindContratActif(_ context.Context, _, _ int64) (*repository.ContratActif, error) {
 	return f.contratActif, nil
+}
+
+func (f *fakeIncidentRepo) FindPrestatairesRepertoire(_ context.Context, _ string, _ int64) ([]int64, error) {
+	return f.repertoire, nil
 }
 
 func (f *fakeIncidentRepo) SetIncidentPrestataire(_ context.Context, ticketID, prestataireID int64) error {
@@ -848,10 +853,144 @@ func TestCreerIncidentSeuilBFranchiFallbackHumain(t *testing.T) {
 		t.Fatalf("CreerIncident: %v", err)
 	}
 	if repo.statutsAppliques[ticket.ID] != idStatutEnAttenteGestionnaire {
-		t.Errorf("statut = %d, attendu en_attente_gestionnaire (%d) : mise en concurrence non automatisable", repo.statutsAppliques[ticket.ID], idStatutEnAttenteGestionnaire)
+		t.Errorf("statut = %d, attendu en_attente_gestionnaire (%d) : un seul candidat trouvé (contrat), pas de répertoire pour un second", repo.statutsAppliques[ticket.ID], idStatutEnAttenteGestionnaire)
 	}
 	if devisListe, _ := repo.ListDevisByTicket(context.Background(), ticket.ID); len(devisListe) != 0 {
-		t.Errorf("devis créés = %d, attendu 0 (mise en concurrence non gérée automatiquement)", len(devisListe))
+		t.Errorf("devis créés = %d, attendu 0 (pas assez de candidats pour la mise en concurrence)", len(devisListe))
+	}
+}
+
+func TestCreerIncidentRepertoireSansContratActif(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	categorie := categorieFuiteEau()
+	repo.contratActif = nil // aucun contrat, mais un prestataire du répertoire correspond
+	repo.repertoire = []int64{7}
+	plafondD := int64(50000)
+	ville := "Lyon"
+	repo.copropriete = &domain.Copropriete{ID: 1, PlafondOrdreServiceCentimes: &plafondD, AdresseVille: &ville}
+	montant := int64(20000) // sous le plafond D
+	claude := &fakeIncidentQualifieur{qualif: claudeapi.QualificationIncident{
+		CategorieTechnique:    &categorie,
+		Urgence:               domain.NiveauUrgenceMoyen,
+		MontantEstimeCentimes: &montant,
+	}}
+	svc := &IncidentService{Repo: repo, Claude: claude}
+
+	ticket, _, err := svc.CreerIncident(context.Background(), CreerIncidentInput{SourceID: 5, CoproprieteID: 1, Objet: "x", CorpsTexte: "y"})
+	if err != nil {
+		t.Fatalf("CreerIncident: %v", err)
+	}
+	if repo.prestatairesDefinis[ticket.ID] != 7 {
+		t.Errorf("prestataire = %d, attendu 7 (répertoire, aucun contrat)", repo.prestatairesDefinis[ticket.ID])
+	}
+	if repo.statutsAppliques[ticket.ID] != idStatutEnAttenteTiers {
+		t.Errorf("statut = %d, attendu en_attente_tiers (%d)", repo.statutsAppliques[ticket.ID], idStatutEnAttenteTiers)
+	}
+}
+
+func TestCreerIncidentMiseEnConcurrenceDeuxDevis(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	categorie := categorieFuiteEau()
+	repo.contratActif = &repository.ContratActif{ContratID: 900, EntrepriseID: 42}
+	repo.repertoire = []int64{7} // un second candidat, distinct du contrat
+	plafondD := int64(10000)
+	seuilB := int64(40000)
+	ville := "Lyon"
+	repo.copropriete = &domain.Copropriete{ID: 1, PlafondOrdreServiceCentimes: &plafondD, SeuilBMiseEnConcurrenceCentimes: &seuilB, AdresseVille: &ville}
+	montant := int64(50000) // au-delà du seuil B
+	claude := &fakeIncidentQualifieur{qualif: claudeapi.QualificationIncident{
+		CategorieTechnique:    &categorie,
+		Urgence:               domain.NiveauUrgenceMoyen,
+		MontantEstimeCentimes: &montant,
+	}}
+	svc := &IncidentService{Repo: repo, Claude: claude}
+
+	ticket, _, err := svc.CreerIncident(context.Background(), CreerIncidentInput{SourceID: 5, CoproprieteID: 1, Objet: "x", CorpsTexte: "y"})
+	if err != nil {
+		t.Fatalf("CreerIncident: %v", err)
+	}
+	if repo.statutsAppliques[ticket.ID] != idStatutEnAttenteTiers {
+		t.Errorf("statut = %d, attendu en_attente_tiers (%d) : 2 candidats trouvés, mise en concurrence possible", repo.statutsAppliques[ticket.ID], idStatutEnAttenteTiers)
+	}
+	devisListe, _ := repo.ListDevisByTicket(context.Background(), ticket.ID)
+	if len(devisListe) != 2 {
+		t.Fatalf("devis créés = %d, attendu 2", len(devisListe))
+	}
+	prestatairesSollicites := map[int64]bool{}
+	for _, d := range devisListe {
+		prestatairesSollicites[d.PrestataireID] = true
+		if d.StatutID != idDevisEnAttente {
+			t.Errorf("statut devis id=%d = %d, attendu en_attente (%d)", d.ID, d.StatutID, idDevisEnAttente)
+		}
+	}
+	if !prestatairesSollicites[42] || !prestatairesSollicites[7] {
+		t.Errorf("prestataires sollicités = %+v, attendu 42 (contrat) et 7 (répertoire)", prestatairesSollicites)
+	}
+}
+
+func TestCreerIncidentMiseEnConcurrenceTroisDevis(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	categorie := categorieFuiteEau()
+	repo.contratActif = &repository.ContratActif{ContratID: 900, EntrepriseID: 42}
+	repo.repertoire = []int64{7, 8} // deux candidats supplémentaires du répertoire : 3 au total
+	plafondD := int64(10000)
+	seuilB := int64(40000)
+	ville := "Lyon"
+	repo.copropriete = &domain.Copropriete{ID: 1, PlafondOrdreServiceCentimes: &plafondD, SeuilBMiseEnConcurrenceCentimes: &seuilB, AdresseVille: &ville}
+	montant := int64(50000)
+	claude := &fakeIncidentQualifieur{qualif: claudeapi.QualificationIncident{
+		CategorieTechnique:    &categorie,
+		Urgence:               domain.NiveauUrgenceMoyen,
+		MontantEstimeCentimes: &montant,
+	}}
+	svc := &IncidentService{Repo: repo, Claude: claude}
+
+	ticket, _, err := svc.CreerIncident(context.Background(), CreerIncidentInput{SourceID: 5, CoproprieteID: 1, Objet: "x", CorpsTexte: "y"})
+	if err != nil {
+		t.Fatalf("CreerIncident: %v", err)
+	}
+	devisListe, _ := repo.ListDevisByTicket(context.Background(), ticket.ID)
+	if len(devisListe) != 3 {
+		t.Fatalf("devis créés = %d, attendu 3 (tous les candidats trouvés, pas seulement 2)", len(devisListe))
+	}
+}
+
+func TestAttendreTousLesDevisNeDecidePasAvantReceptionComplete(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	repo.tickets[1] = &domain.Ticket{ID: 1, CoproprieteID: 1}
+	repo.incidents[1] = &domain.Incident{TicketID: 1}
+	repo.copropriete = &domain.Copropriete{ID: 1} // aucun seuil configuré : décision directe une fois tous les devis reçus
+	repo.devis[10] = &domain.Devis{ID: 10, TicketID: 1, PrestataireID: 42, StatutID: idDevisEnAttente}
+	repo.devis[11] = &domain.Devis{ID: 11, TicketID: 1, PrestataireID: 7, StatutID: idDevisEnAttente}
+	svc := &IncidentService{Repo: repo}
+
+	// Un seul des deux devis reçu : la décision ne doit pas être prise.
+	if err := svc.EnregistrerDevisRecu(context.Background(), 1, 10, 30000); err != nil {
+		t.Fatalf("EnregistrerDevisRecu: %v", err)
+	}
+	if repo.devis[10].StatutID != idDevisRecu {
+		t.Errorf("statut devis 10 = %d, attendu recu (%d)", repo.devis[10].StatutID, idDevisRecu)
+	}
+	if repo.incidents[1].DevisRetenuID != nil {
+		t.Error("DevisRetenuID renseigné trop tôt : le second devis (11) est encore en attente")
+	}
+
+	// Le second devis arrive, moins cher : la décision doit maintenant
+	// avoir lieu et retenir le moins-disant (11), rejeter l'autre (10).
+	if err := svc.EnregistrerDevisRecu(context.Background(), 1, 11, 25000); err != nil {
+		t.Fatalf("EnregistrerDevisRecu: %v", err)
+	}
+	if repo.devis[11].StatutID != idDevisRetenu {
+		t.Errorf("statut devis 11 (moins-disant) = %d, attendu retenu (%d)", repo.devis[11].StatutID, idDevisRetenu)
+	}
+	if repo.devis[10].StatutID != idDevisRejete {
+		t.Errorf("statut devis 10 (plus cher) = %d, attendu rejete (%d)", repo.devis[10].StatutID, idDevisRejete)
+	}
+	if repo.incidents[1].DevisRetenuID == nil || *repo.incidents[1].DevisRetenuID != 11 {
+		t.Errorf("DevisRetenuID = %v, attendu 11", repo.incidents[1].DevisRetenuID)
+	}
+	if repo.statutsAppliques[1] != idStatutEnAttenteTiers {
+		t.Errorf("statut ticket = %d, attendu en_attente_tiers (%d)", repo.statutsAppliques[1], idStatutEnAttenteTiers)
 	}
 }
 
