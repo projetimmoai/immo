@@ -34,6 +34,14 @@ type Copropriete struct {
 	CreePar                           *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
 	Reference                         string // référence lisible (ex: "COP1"), générée par la base (DEFAULT), jamais fournie à l'insertion
 	BanqueID                          *int64 // FK -> banque.id (nullable, 1-1)
+
+	// PlafondOrdreServiceCentimes est le seuil D du graphe de cycle de vie
+	// d'un incident (cf. docs/cycle-vie-incident.md, phase 0.D) : en-dessous,
+	// le prestataire retenu intervient directement, sans devis préalable.
+	// Fixé par le gestionnaire ou la convention de gestion — pas d'origine
+	// légale, par opposition aux seuils A/B (consultation CS, mise en
+	// concurrence) et à l'enveloppe C (délégation CS), pas encore modélisés.
+	PlafondOrdreServiceCentimes *int64
 }
 
 // Banque contient des informations bancaires (IBAN, BIC...) — dans une

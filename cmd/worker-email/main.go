@@ -1,19 +1,19 @@
 // Command worker-email est, pour l'instant, un outil "à la main" (one-shot,
 // pas de boucle ni de connexion Gmail) pour faire tourner de bout en bout le
-// pipeline déjà construit dans internal/email : enrichissement de
-// l'expéditeur, détermination de la copropriété concernée, puis routage
-// vers une action (pour l'instant, seul le rôle occupant a un routeur, cf.
-// email.RouterOccupant).
+// pipeline déjà construit dans internal/email : enregistrement de la
+// TicketSource, enrichissement de l'expéditeur, détermination de la
+// copropriété concernée, puis routage vers une action (pour l'instant, seul
+// le rôle occupant a un routeur, cf. email.RouterOccupant).
 //
 // Le message traité est fourni via les flags (ou un exemple par défaut) —
 // pas encore lu depuis Gmail : cf. internal/gmailapi, dont la connexion
 // (OAuth2, cmd/gmail-auth) est un chantier volontairement séparé de celui-
-// ci. N'écrit rien en base (pas d'InsertEmail) : cet outil sert à observer
-// le pipeline, pas encore à le faire tourner pour de vrai.
+// ci.
 //
-// Fait de vrais appels réseau (Supabase, et Claude si nécessaire à la
-// détermination copropriete/action) — nécessite SUPABASE_URL,
-// SUPABASE_SERVICE_ROLE_KEY et ANTHROPIC_API_KEY dans l'environnement.
+// Fait de vrais appels réseau et écrit réellement en base (Supabase, et
+// Claude pour la détermination copropriete/action puis la qualification
+// d'un incident) — nécessite SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY et
+// ANTHROPIC_API_KEY dans l'environnement.
 package main
 
 import (
@@ -30,6 +30,7 @@ import (
 	"github.com/projetimmoai/immo/internal/email"
 	"github.com/projetimmoai/immo/internal/gmailapi"
 	"github.com/projetimmoai/immo/internal/repository"
+	"github.com/projetimmoai/immo/internal/service"
 )
 
 func main() {
@@ -85,20 +86,49 @@ func run(from, subject, body string) error {
 	}
 	fmt.Printf("--- copropriété ---\n%+v\n\n", resCop)
 
-	ctxRoutage := email.NouveauContexteRoutage(ctxEmail, resCop)
+	// 3. Enregistrement de la TicketSource (type "email") : tout Ticket créé
+	// en aval doit y référencer sa source (cf. domain.Ticket.SourceID).
+	statutNouveauID, err := repo.TicketSourceStatutTraitementID(ctx, domain.TicketSourceStatutNouveau)
+	if err != nil {
+		return fmt.Errorf("résolution du statut de traitement initial: %w", err)
+	}
+	source := &domain.TicketSource{
+		DateReception:      time.Now().UTC(),
+		PersonneID:         &ctxEmail.Personne.ID,
+		CoproprieteID:      resCop.CoproprieteID,
+		StatutTraitementID: statutNouveauID,
+	}
+	var messageID *string
+	if msg.MessageIDHeader != "" {
+		messageID = &msg.MessageIDHeader
+	}
+	createdSource, _, err := repo.InsertEmail(ctx, source, &domain.Email{
+		MessageID:       messageID,
+		ExpediteurEmail: msg.From,
+		Objet:           &msg.Subject,
+		CorpsTexte:      &msg.BodyText,
+		CorpsHTML:       &msg.BodyHTML,
+	})
+	if err != nil {
+		return fmt.Errorf("enregistrement de la TicketSource: %w", err)
+	}
+	fmt.Printf("--- ticket_source ---\nid=%d\n\n", createdSource.ID)
+
+	ctxRoutage := email.NouveauContexteRoutage(ctxEmail, resCop, createdSource.ID)
 	if ctxRoutage == nil {
 		fmt.Println("--- résultat ---\nCopropriété non déterminée : pas de routage possible.")
 		return nil
 	}
 
-	// 3. Routage vers une action, selon le rôle retenu — seul le rôle
+	// 4. Routage vers une action, selon le rôle retenu — seul le rôle
 	// occupant a un routeur pour l'instant (cf. email.RouterOccupant) ;
 	// gestionnaire/coproprietaire/prestataire n'en ont pas encore.
 	if ctxRoutage.Role == nil || *ctxRoutage.Role != domain.RoleOccupant {
 		fmt.Printf("--- résultat ---\nRôle retenu %v : aucun routeur d'actions pour ce rôle pour l'instant (seul occupant en a un).\n", ctxRoutage.Role)
 		return nil
 	}
-	resActions, err := email.RouterOccupant(ctx, claude, actions, *ctxRoutage, subject, body)
+	deps := email.ActionDeps{Incident: &service.IncidentService{Repo: repo, Claude: claude}}
+	resActions, err := email.RouterOccupant(ctx, claude, deps, actions, *ctxRoutage, subject, body)
 	if err != nil {
 		return fmt.Errorf("routage de l'action: %w", err)
 	}
@@ -106,7 +136,7 @@ func run(from, subject, body string) error {
 	for _, res := range resActions {
 		fmt.Printf("%+v\n", res)
 	}
-	fmt.Println("\n(la ou les fonctions de traitement correspondantes ont été appelées, mais elles ne font encore rien : cf. internal/email/incident.go et consorts)")
+	fmt.Println("\n(la ou les fonctions de traitement correspondantes ont été appelées ; cf. internal/email/incident.go pour ce qui est réellement implémenté, les autres restent des no-ops)")
 	return nil
 }
 

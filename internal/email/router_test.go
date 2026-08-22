@@ -7,6 +7,7 @@ import (
 	"github.com/projetimmoai/immo/internal/claudeapi"
 	"github.com/projetimmoai/immo/internal/domain"
 	"github.com/projetimmoai/immo/internal/repository"
+	"github.com/projetimmoai/immo/internal/service"
 )
 
 type fakeActionDecideur struct {
@@ -18,6 +19,25 @@ type fakeActionDecideur struct {
 func (f *fakeActionDecideur) DecideAction(_ context.Context, actions []domain.Action, _ domain.ContexteRoutage, _, _ string) ([]claudeapi.DecisionAction, error) {
 	f.actionsRecues = actions
 	return f.decisions, f.err
+}
+
+// fakeIncidentCreateur simule service.IncidentService pour les tests de
+// dispatch (cf. incidentCreateur) — les fonctions de traitement (cf.
+// traiterIncident) ne sont pas testées ici via un vrai IncidentService.
+type fakeIncidentCreateur struct {
+	err         error
+	inputsRecus []service.CreerIncidentInput
+}
+
+func (f *fakeIncidentCreateur) CreerIncident(_ context.Context, in service.CreerIncidentInput) (*domain.Ticket, *domain.Incident, error) {
+	f.inputsRecus = append(f.inputsRecus, in)
+	return &domain.Ticket{ID: 1, Reference: "TIC1"}, &domain.Incident{TicketID: 1}, f.err
+}
+
+// depsAvecIncidentFake construit un ActionDeps avec un fakeIncidentCreateur
+// — utilisé par les tests qui dispatchent domain.ActionIncident.
+func depsAvecIncidentFake() ActionDeps {
+	return ActionDeps{Incident: &fakeIncidentCreateur{}}
 }
 
 func actionsOccupantTest() []domain.Action {
@@ -36,7 +56,7 @@ func TestRouterVersActionsActionConnueAppelleLeBonGestionnaire(t *testing.T) {
 	}}
 	ctxRoutage := domain.ContexteRoutage{CoproprieteReference: "COP1"}
 
-	resultats, err := routerVersActions(context.Background(), decideur, actionsOccupantTest(), ctxRoutage, "Fuite d'eau", "Il y a une fuite dans le lot")
+	resultats, err := routerVersActions(context.Background(), decideur, depsAvecIncidentFake(), actionsOccupantTest(), ctxRoutage, "Fuite d'eau", "Il y a une fuite dans le lot")
 	if err != nil {
 		t.Fatalf("routerVersActions: %v", err)
 	}
@@ -60,7 +80,7 @@ func TestRouterVersActionsActionInconnueRejetee(t *testing.T) {
 	}}
 	ctxRoutage := domain.ContexteRoutage{CoproprieteReference: "COP1"}
 
-	resultats, err := routerVersActions(context.Background(), decideur, actionsOccupantTest(), ctxRoutage, "Objet", "Corps")
+	resultats, err := routerVersActions(context.Background(), decideur, ActionDeps{}, actionsOccupantTest(), ctxRoutage, "Objet", "Corps")
 	if err != nil {
 		t.Fatalf("routerVersActions: %v", err)
 	}
@@ -80,7 +100,7 @@ func TestRouterVersActionsPlusieursDemandesDispatchentChacune(t *testing.T) {
 	}}
 	ctxRoutage := domain.ContexteRoutage{CoproprieteReference: "COP1"}
 
-	resultats, err := routerVersActions(context.Background(), decideur, actionsOccupantTest(), ctxRoutage, "Objet", "Corps")
+	resultats, err := routerVersActions(context.Background(), decideur, depsAvecIncidentFake(), actionsOccupantTest(), ctxRoutage, "Objet", "Corps")
 	if err != nil {
 		t.Fatalf("routerVersActions: %v", err)
 	}
@@ -94,7 +114,7 @@ func TestRouterVersActionsPlusieursDemandesDispatchentChacune(t *testing.T) {
 
 func TestRouterVersActionsAucuneActionDisponible(t *testing.T) {
 	ctxRoutage := domain.ContexteRoutage{CoproprieteReference: "COP1"}
-	_, err := routerVersActions(context.Background(), &fakeActionDecideur{}, nil, ctxRoutage, "Objet", "Corps")
+	_, err := routerVersActions(context.Background(), &fakeActionDecideur{}, ActionDeps{}, nil, ctxRoutage, "Objet", "Corps")
 	if err == nil {
 		t.Fatal("attendu une erreur (aucune action disponible), obtenu nil")
 	}
@@ -149,9 +169,12 @@ func TestNouveauContexteRoutage(t *testing.T) {
 	}
 	res := ResolutionCopropriete{CoproprieteID: int64Ptr(1), CoproprieteReference: "COP1", Role: &role}
 
-	cr := NouveauContexteRoutage(ec, res)
+	cr := NouveauContexteRoutage(ec, res, 42)
 	if cr == nil {
 		t.Fatal("NouveauContexteRoutage = nil, attendu non nil (CoproprieteID renseigné)")
+	}
+	if cr.SourceID != 42 {
+		t.Errorf("SourceID = %d, attendu 42", cr.SourceID)
 	}
 	if cr.Personne != personne {
 		t.Errorf("Personne = %+v, attendu %+v", cr.Personne, personne)
@@ -171,7 +194,7 @@ func TestNouveauContexteRoutage(t *testing.T) {
 }
 
 func TestNouveauContexteRoutageCoproprieteNonIdentifiee(t *testing.T) {
-	if cr := NouveauContexteRoutage(&Contexte{}, ResolutionCopropriete{}); cr != nil {
+	if cr := NouveauContexteRoutage(&Contexte{}, ResolutionCopropriete{}, 0); cr != nil {
 		t.Errorf("NouveauContexteRoutage = %+v, attendu nil (CoproprieteID absent)", cr)
 	}
 }

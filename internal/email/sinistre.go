@@ -11,6 +11,6 @@ import (
 // déclaration d'assurance, par opposition à un simple incident technique.
 //
 // TODO: implémenter (création du sinistre en base, notification...).
-func traiterSinistre(_ context.Context, _ domain.ContexteRoutage, _ ResolutionAction, _, _ string) error {
+func traiterSinistre(_ context.Context, _ ActionDeps, _ domain.ContexteRoutage, _ ResolutionAction, _, _ string) error {
 	return nil
 }

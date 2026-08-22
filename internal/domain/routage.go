@@ -15,4 +15,11 @@ type ContexteRoutage struct {
 	CoproprieteReference string
 	LotsReferences       []string // références des lots de la Personne dans cette Copropriete, si occupant/coproprietaire
 	ContratsNumeros      []string // numéros des contrats de la Personne dans cette Copropriete, si prestataire
+
+	// SourceID est la TicketSource (cf. domain.TicketSource) à l'origine de
+	// ce routage — tout Ticket créé par une fonction de traitement (cf.
+	// email.gestionnaireAction) doit y référencer sa source (Ticket.SourceID
+	// est NOT NULL). Renseigné par l'appelant (cf. NouveauContexteRoutage)
+	// une fois la source persistée en base.
+	SourceID int64
 }

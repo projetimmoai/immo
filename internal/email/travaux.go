@@ -11,6 +11,6 @@ import (
 // à propos de travaux en cours ou déjà réalisés dans la copropriété.
 //
 // TODO: implémenter.
-func traiterTravaux(_ context.Context, _ domain.ContexteRoutage, _ ResolutionAction, _, _ string) error {
+func traiterTravaux(_ context.Context, _ ActionDeps, _ domain.ContexteRoutage, _ ResolutionAction, _, _ string) error {
 	return nil
 }

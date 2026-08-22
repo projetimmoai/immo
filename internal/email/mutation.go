@@ -11,6 +11,6 @@ import (
 // répercuter sur les informations connues de l'occupant ou de son lot.
 //
 // TODO: implémenter.
-func traiterMutation(_ context.Context, _ domain.ContexteRoutage, _ ResolutionAction, _, _ string) error {
+func traiterMutation(_ context.Context, _ ActionDeps, _ domain.ContexteRoutage, _ ResolutionAction, _, _ string) error {
 	return nil
 }

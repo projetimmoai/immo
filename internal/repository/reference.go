@@ -111,3 +111,28 @@ func (c *Client) LogTypeID(ctx context.Context, description string) (int64, erro
 func (c *Client) ConseilSyndicalMandatStatutID(ctx context.Context, description string) (int64, error) {
 	return c.lookupReferenceID(ctx, "conseil_syndical_mandat_statut", description)
 }
+
+// CategorieTechniqueID retrouve l'ID de categorie_technique pour la
+// description donnée (catalogue partagé entre Incident et Contrat, cf.
+// domain.CategorieTechnique).
+func (c *Client) CategorieTechniqueID(ctx context.Context, description string) (int64, error) {
+	return c.lookupReferenceID(ctx, "categorie_technique", description)
+}
+
+// ModeVerificationID retrouve l'ID de mode_verification pour la description
+// donnée (voir les constantes domain.ModeVerification*).
+func (c *Client) ModeVerificationID(ctx context.Context, description string) (int64, error) {
+	return c.lookupReferenceID(ctx, "mode_verification", description)
+}
+
+// VerificationResultatID retrouve l'ID de verification_resultat pour la
+// description donnée (voir les constantes domain.VerificationResultat*).
+func (c *Client) VerificationResultatID(ctx context.Context, description string) (int64, error) {
+	return c.lookupReferenceID(ctx, "verification_resultat", description)
+}
+
+// FactureStatutID retrouve l'ID de facture_statut pour la description
+// donnée (voir les constantes domain.FactureStatut*).
+func (c *Client) FactureStatutID(ctx context.Context, description string) (int64, error) {
+	return c.lookupReferenceID(ctx, "facture_statut", description)
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/projetimmoai/immo/internal/claudeapi"
 	"github.com/projetimmoai/immo/internal/domain"
+	"github.com/projetimmoai/immo/internal/service"
 )
 
 // ResolutionAction est le résultat du routage d'un e-mail dont la
@@ -25,12 +26,27 @@ type actionDecideur interface {
 	DecideAction(ctx context.Context, actions []domain.Action, ctxRoutage domain.ContexteRoutage, objet, corpsTexte string) ([]claudeapi.DecisionAction, error)
 }
 
+// incidentCreateur est la portion de service.IncidentService utilisée ici —
+// une interface étroite (comme actionDecideur) pour ne pas dépendre du type
+// concret et pouvoir tester avec un faux (cf. incident_test.go).
+type incidentCreateur interface {
+	CreerIncident(ctx context.Context, in service.CreerIncidentInput) (*domain.Ticket, *domain.Incident, error)
+}
+
+// ActionDeps regroupe les dépendances des fonctions de traitement par action
+// (cf. gestionnaireAction) qui vont au-delà du contexte de routage —
+// aujourd'hui seulement IncidentService ; les autres actions restent des
+// no-ops et n'en ont pas encore besoin.
+type ActionDeps struct {
+	Incident incidentCreateur
+}
+
 // gestionnaireAction est le type de fonction appelée pour traiter un
 // e-mail une fois l'action décidée — une par action connue (cf.
 // internal/email/incident.go, sinistre.go... un fichier par action :
 // chacune va accumuler sa propre logique métier, ce qui justifie de les
 // garder séparées plutôt que dans un seul gros fichier).
-type gestionnaireAction func(ctx context.Context, ctxRoutage domain.ContexteRoutage, decision ResolutionAction, objet, corpsTexte string) error
+type gestionnaireAction func(ctx context.Context, deps ActionDeps, ctxRoutage domain.ContexteRoutage, decision ResolutionAction, objet, corpsTexte string) error
 
 // gestionnairesAction associe chaque action déjà couverte à sa fonction de
 // traitement. Complété au fur et à mesure que de nouvelles actions sont
@@ -62,7 +78,7 @@ var gestionnairesAction = map[string]gestionnaireAction{
 // ResolutionAction produites (même partiellement, en cas d'erreur), pour ne
 // pas perdre le résultat des demandes qui ont réussi ; les erreurs
 // rencontrées sont agrégées (errors.Join) dans l'erreur retournée.
-func routerVersActions(ctx context.Context, claude actionDecideur, actions []domain.Action, ctxRoutage domain.ContexteRoutage, objet, corpsTexte string) ([]ResolutionAction, error) {
+func routerVersActions(ctx context.Context, claude actionDecideur, deps ActionDeps, actions []domain.Action, ctxRoutage domain.ContexteRoutage, objet, corpsTexte string) ([]ResolutionAction, error) {
 	if len(actions) == 0 {
 		return nil, fmt.Errorf("email: routage impossible : aucune action disponible pour ce rôle")
 	}
@@ -92,7 +108,7 @@ func routerVersActions(ctx context.Context, claude actionDecideur, actions []dom
 			erreurs = append(erreurs, fmt.Errorf("email: aucune fonction de traitement enregistrée pour l'action %q", res.Action))
 			continue
 		}
-		if err := gestionnaire(ctx, ctxRoutage, res, objet, corpsTexte); err != nil {
+		if err := gestionnaire(ctx, deps, ctxRoutage, res, objet, corpsTexte); err != nil {
 			erreurs = append(erreurs, fmt.Errorf("email: traitement de l'action %q: %w", res.Action, err))
 		}
 	}
@@ -127,10 +143,12 @@ func filtrerActions(actions []*domain.Action, descriptions []string) []domain.Ac
 }
 
 // NouveauContexteRoutage construit le domain.ContexteRoutage d'un e-mail à
-// partir du Contexte enrichi de son expéditeur et de la copropriété
-// retenue par DetermineCopropriete. Retourne nil si res.CoproprieteID est
-// nil (rien à router : la copropriété n'a pas été identifiée).
-func NouveauContexteRoutage(ec *Contexte, res ResolutionCopropriete) *domain.ContexteRoutage {
+// partir du Contexte enrichi de son expéditeur, de la copropriété retenue
+// par DetermineCopropriete, et de la TicketSource déjà persistée pour cet
+// e-mail (cf. domain.ContexteRoutage.SourceID — tout Ticket créé en aval
+// doit y référencer sa source). Retourne nil si res.CoproprieteID est nil
+// (rien à router : la copropriété n'a pas été identifiée).
+func NouveauContexteRoutage(ec *Contexte, res ResolutionCopropriete, sourceID int64) *domain.ContexteRoutage {
 	if res.CoproprieteID == nil {
 		return nil
 	}
@@ -139,6 +157,7 @@ func NouveauContexteRoutage(ec *Contexte, res ResolutionCopropriete) *domain.Con
 		Role:                 res.Role,
 		CoproprieteID:        *res.CoproprieteID,
 		CoproprieteReference: res.CoproprieteReference,
+		SourceID:             sourceID,
 	}
 	for _, lot := range ec.Lots {
 		if lot.CoproprieteID == cr.CoproprieteID {

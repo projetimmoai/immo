@@ -11,6 +11,6 @@ import (
 // une demande de document lié à la copropriété.
 //
 // TODO: implémenter.
-func traiterDemandeAdministrative(_ context.Context, _ domain.ContexteRoutage, _ ResolutionAction, _, _ string) error {
+func traiterDemandeAdministrative(_ context.Context, _ ActionDeps, _ domain.ContexteRoutage, _ ResolutionAction, _, _ string) error {
 	return nil
 }

@@ -29,6 +29,6 @@ var actionsOccupant = []string{
 // charger une fois par l'appelant (cf. repository.Client.ListActions)
 // plutôt qu'à chaque appel — seul le sous-ensemble pertinent pour un
 // occupant (actionsOccupant) est effectivement proposé à Claude.
-func RouterOccupant(ctx context.Context, claude actionDecideur, actions []*domain.Action, ctxRoutage domain.ContexteRoutage, objet, corpsTexte string) ([]ResolutionAction, error) {
-	return routerVersActions(ctx, claude, filtrerActions(actions, actionsOccupant), ctxRoutage, objet, corpsTexte)
+func RouterOccupant(ctx context.Context, claude actionDecideur, deps ActionDeps, actions []*domain.Action, ctxRoutage domain.ContexteRoutage, objet, corpsTexte string) ([]ResolutionAction, error) {
+	return routerVersActions(ctx, claude, deps, filtrerActions(actions, actionsOccupant), ctxRoutage, objet, corpsTexte)
 }

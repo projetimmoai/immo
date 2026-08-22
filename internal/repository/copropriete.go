@@ -36,6 +36,7 @@ type coproprieteRow struct {
 	CreePar                           *int64     `json:"cree_par"`
 	Reference                         string     `json:"reference"`
 	BanqueID                          *int64     `json:"banque_id"`
+	PlafondOrdreServiceCentimes       *int64     `json:"plafond_ordre_service_centimes"`
 }
 
 func (r coproprieteRow) toDomain() *domain.Copropriete {
@@ -65,6 +66,7 @@ func (r coproprieteRow) toDomain() *domain.Copropriete {
 		CreePar:                           r.CreePar,
 		Reference:                         r.Reference,
 		BanqueID:                          r.BanqueID,
+		PlafondOrdreServiceCentimes:       r.PlafondOrdreServiceCentimes,
 	}
 }
 
@@ -146,6 +148,20 @@ func (c *Client) ListCopropriete(ctx context.Context) ([]*domain.Copropriete, er
 		result = append(result, r.toDomain())
 	}
 	return result, nil
+}
+
+// FindCoproprieteByID retrouve une Copropriete par son ID. Retourne (nil,
+// nil), sans erreur, si aucune copropriete ne correspond.
+func (c *Client) FindCoproprieteByID(ctx context.Context, id int64) (*domain.Copropriete, error) {
+	var rows []coproprieteRow
+	path := fmt.Sprintf("/copropriete?select=*&id=eq.%d&limit=1", id)
+	if err := c.do(ctx, http.MethodGet, path, nil, &rows); err != nil {
+		return nil, fmt.Errorf("repository: recherche copropriete id=%d: %w", id, err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return rows[0].toDomain(), nil
 }
 
 // DeleteCopropriete supprime une Copropriete par son ID (utilisé notamment

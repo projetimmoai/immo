@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // ContratAssocie décrit un contrat où la personne recherchée est
@@ -68,4 +69,43 @@ func (c *Client) ListContratsParPrestataire(ctx context.Context, entrepriseID in
 		result = append(result, ca)
 	}
 	return result, nil
+}
+
+// ContratActif décrit un contrat de maintenance actif retenu pour une
+// copropriété et une catégorie technique données (cf. FindContratActif).
+type ContratActif struct {
+	ContratID     int64
+	EntrepriseID  int64 // FK -> personne.id (personne_morale prestataire)
+	NumeroContrat *string
+}
+
+// contratActifRow reflète la forme de la réponse JSON de FindContratActif.
+type contratActifRow struct {
+	ID            int64   `json:"id"`
+	EntrepriseID  int64   `json:"entreprise_id"`
+	NumeroContrat *string `json:"numero_contrat"`
+}
+
+// FindContratActif cherche un contrat de maintenance actif (date_fin nulle,
+// ou dans le futur) pour la copropriété et la catégorie technique données
+// (phase 3.3.1 du graphe de cycle de vie, cf. docs/cycle-vie-incident.md) —
+// sélection simplifiée pour la première tranche implémentée : ne cherche pas
+// encore dans le répertoire des prestataires par zone d'intervention/
+// compétence (cf. 3.3.2-3.3.3, pas encore modélisé), seulement un contrat
+// existant. Retourne (nil, nil), sans erreur, si aucun contrat actif ne
+// correspond — l'appelant doit alors passer à une sélection humaine.
+func (c *Client) FindContratActif(ctx context.Context, coproprieteID, categorieTechniqueID int64) (*ContratActif, error) {
+	today := time.Now().UTC().Format(dateLayout)
+	path := fmt.Sprintf(
+		"/contrat?select=id,entreprise_id,numero_contrat&copropriete_id=eq.%d&categorie_technique_id=eq.%d&or=(date_fin.is.null,date_fin.gte.%s)&limit=1",
+		coproprieteID, categorieTechniqueID, today,
+	)
+	var rows []contratActifRow
+	if err := c.do(ctx, http.MethodGet, path, nil, &rows); err != nil {
+		return nil, fmt.Errorf("repository: recherche contrat actif (copropriete_id=%d, categorie_technique_id=%d): %w", coproprieteID, categorieTechniqueID, err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return &ContratActif{ContratID: rows[0].ID, EntrepriseID: rows[0].EntrepriseID, NumeroContrat: rows[0].NumeroContrat}, nil
 }

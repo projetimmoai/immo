@@ -32,7 +32,7 @@ func TestRouterOccupantNePropseQueLesActionsOccupant(t *testing.T) {
 	}}
 	ctxRoutage := domain.ContexteRoutage{CoproprieteReference: "COP1"}
 
-	resultats, err := RouterOccupant(context.Background(), decideur, actionsTableTest(), ctxRoutage, "Ascenseur en panne", "Bonjour, l'ascenseur ne fonctionne plus.")
+	resultats, err := RouterOccupant(context.Background(), decideur, depsAvecIncidentFake(), actionsTableTest(), ctxRoutage, "Ascenseur en panne", "Bonjour, l'ascenseur ne fonctionne plus.")
 	if err != nil {
 		t.Fatalf("RouterOccupant: %v", err)
 	}
