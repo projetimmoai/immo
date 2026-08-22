@@ -35,7 +35,8 @@ func TestLookupReferenceID(t *testing.T) {
 		description string
 	}{
 		{"action", c.ActionID, domain.ActionSinistre},
-		{"email_statut_traitement", c.EmailStatutTraitementID, domain.EmailStatutNouveau},
+		{"ticket_source_statut_traitement", c.TicketSourceStatutTraitementID, domain.TicketSourceStatutNouveau},
+		{"ticket_source_type", c.TicketSourceTypeID, domain.TicketSourceTypeEmail},
 		{"ticket_statut", c.TicketStatutID, domain.TicketStatutNouveau},
 		{"niveau_urgence", c.NiveauUrgenceID, domain.NiveauUrgenceFaible},
 		{"sinistre_resultat", c.SinistreResultatID, domain.SinistreResultatIndemnise},
@@ -78,36 +79,41 @@ func TestInsertEmailAndFind(t *testing.T) {
 	c := newTestClient(t)
 	ctx := context.Background()
 
-	statutID, err := c.EmailStatutTraitementID(ctx, domain.EmailStatutNouveau)
+	statutID, err := c.TicketSourceStatutTraitementID(ctx, domain.TicketSourceStatutNouveau)
 	if err != nil {
-		t.Fatalf("EmailStatutTraitementID: %v", err)
+		t.Fatalf("TicketSourceStatutTraitementID: %v", err)
 	}
 
 	messageID := fmt.Sprintf("test-integration-%d@immo.local", time.Now().UnixNano())
 	objet := "Test d'intégration internal/repository"
-	input := &domain.Email{
-		MessageID:          &messageID,
+	sourceInput := &domain.TicketSource{
 		DateReception:      time.Now().UTC().Truncate(time.Second),
-		ExpediteurEmail:    "test-integration@example.com",
-		Objet:              &objet,
 		StatutTraitementID: statutID,
 	}
+	emailInput := &domain.Email{
+		MessageID:       &messageID,
+		ExpediteurEmail: "test-integration@example.com",
+		Objet:           &objet,
+	}
 
-	created, err := c.InsertEmail(ctx, input)
+	createdSource, createdEmail, err := c.InsertEmail(ctx, sourceInput, emailInput)
 	if err != nil {
 		t.Fatalf("InsertEmail: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := c.DeleteEmail(context.Background(), created.ID); err != nil {
-			t.Errorf("nettoyage DeleteEmail id=%d: %v", created.ID, err)
+		if err := c.DeleteTicketSource(context.Background(), createdSource.ID); err != nil {
+			t.Errorf("nettoyage DeleteTicketSource id=%d: %v", createdSource.ID, err)
 		}
 	})
 
-	if created.ID <= 0 {
-		t.Fatalf("InsertEmail: ID invalide: %d", created.ID)
+	if createdSource.ID <= 0 {
+		t.Fatalf("InsertEmail: TicketSource.ID invalide: %d", createdSource.ID)
 	}
-	if created.ExpediteurEmail != input.ExpediteurEmail {
-		t.Errorf("ExpediteurEmail = %q, attendu %q", created.ExpediteurEmail, input.ExpediteurEmail)
+	if createdEmail.ExpediteurEmail != emailInput.ExpediteurEmail {
+		t.Errorf("ExpediteurEmail = %q, attendu %q", createdEmail.ExpediteurEmail, emailInput.ExpediteurEmail)
+	}
+	if createdEmail.TicketSourceID != createdSource.ID {
+		t.Errorf("Email.TicketSourceID = %d, attendu %d (celui de la TicketSource créée)", createdEmail.TicketSourceID, createdSource.ID)
 	}
 
 	found, err := c.FindEmailByMessageID(ctx, messageID)
@@ -117,8 +123,8 @@ func TestInsertEmailAndFind(t *testing.T) {
 	if found == nil {
 		t.Fatal("FindEmailByMessageID: attendu un résultat, obtenu nil")
 	}
-	if found.ID != created.ID {
-		t.Errorf("FindEmailByMessageID: ID = %d, attendu %d", found.ID, created.ID)
+	if found.TicketSourceID != createdSource.ID {
+		t.Errorf("FindEmailByMessageID: TicketSourceID = %d, attendu %d", found.TicketSourceID, createdSource.ID)
 	}
 }
 

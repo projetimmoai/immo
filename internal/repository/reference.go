@@ -14,7 +14,7 @@ type referenceRow struct {
 }
 
 // lookupReferenceID retrouve l'ID d'une ligne de table de référence à partir
-// de sa description exacte (ex: "nouveau" dans email_statut_traitement).
+// de sa description exacte (ex: "nouveau" dans ticket_source_statut_traitement).
 // Les tables de référence sont éditables librement en base : on ne code
 // jamais un ID en dur, toujours une recherche par description.
 func (c *Client) lookupReferenceID(ctx context.Context, table, description string) (int64, error) {
@@ -67,10 +67,17 @@ func formatParentID(parentID *int64) string {
 	return fmt.Sprintf("%d", *parentID)
 }
 
-// EmailStatutTraitementID retrouve l'ID de email_statut_traitement pour la
-// description donnée (voir les constantes domain.EmailStatut*).
-func (c *Client) EmailStatutTraitementID(ctx context.Context, description string) (int64, error) {
-	return c.lookupReferenceID(ctx, "email_statut_traitement", description)
+// TicketSourceStatutTraitementID retrouve l'ID de
+// ticket_source_statut_traitement pour la description donnée (voir les
+// constantes domain.TicketSourceStatut*).
+func (c *Client) TicketSourceStatutTraitementID(ctx context.Context, description string) (int64, error) {
+	return c.lookupReferenceID(ctx, "ticket_source_statut_traitement", description)
+}
+
+// TicketSourceTypeID retrouve l'ID de ticket_source_type pour la
+// description donnée (voir les constantes domain.TicketSourceType*).
+func (c *Client) TicketSourceTypeID(ctx context.Context, description string) (int64, error) {
+	return c.lookupReferenceID(ctx, "ticket_source_type", description)
 }
 
 // TicketStatutID retrouve l'ID de ticket_statut pour la description donnée

@@ -4,89 +4,82 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/projetimmoai/immo/internal/domain"
 )
 
-// emailRow est la représentation JSON d'une ligne de la table email.
+// emailRow est la représentation JSON d'une ligne de la table email (table
+// détail, cf. domain.Email — le squelette commun vit sur TicketSource).
 type emailRow struct {
-	ID                   int64      `json:"id"`
-	CreatedAt            time.Time  `json:"created_at"`
-	MessageID            *string    `json:"message_id"`
-	DateReception        time.Time  `json:"date_reception"`
-	ExpediteurEmail      string     `json:"expediteur_email"`
-	ExpediteurPersonneID *int64     `json:"expediteur_personne_id"`
-	Objet                *string    `json:"objet"`
-	CorpsTexte           *string    `json:"corps_texte"`
-	CorpsHTML            *string    `json:"corps_html"`
-	CoproprieteID        *int64     `json:"copropriete_id"`
-	LotID                *int64     `json:"lot_id"`
-	StatutTraitementID   int64      `json:"statut_traitement_id"`
-	TraiteLe             *time.Time `json:"traite_le"`
-	TraitePar            *int64     `json:"traite_par"`
-	ErreurTraitement     *string    `json:"erreur_traitement"`
+	TicketSourceID  int64   `json:"ticket_source_id"`
+	MessageID       *string `json:"message_id"`
+	ExpediteurEmail string  `json:"expediteur_email"`
+	Objet           *string `json:"objet"`
+	CorpsTexte      *string `json:"corps_texte"`
+	CorpsHTML       *string `json:"corps_html"`
 }
 
 func (r emailRow) toDomain() *domain.Email {
 	return &domain.Email{
-		ID:                   r.ID,
-		CreatedAt:            r.CreatedAt,
-		MessageID:            r.MessageID,
-		DateReception:        r.DateReception,
-		ExpediteurEmail:      r.ExpediteurEmail,
-		ExpediteurPersonneID: r.ExpediteurPersonneID,
-		Objet:                r.Objet,
-		CorpsTexte:           r.CorpsTexte,
-		CorpsHTML:            r.CorpsHTML,
-		CoproprieteID:        r.CoproprieteID,
-		LotID:                r.LotID,
-		StatutTraitementID:   r.StatutTraitementID,
-		TraiteLe:             r.TraiteLe,
-		TraitePar:            r.TraitePar,
-		ErreurTraitement:     r.ErreurTraitement,
+		TicketSourceID:  r.TicketSourceID,
+		MessageID:       r.MessageID,
+		ExpediteurEmail: r.ExpediteurEmail,
+		Objet:           r.Objet,
+		CorpsTexte:      r.CorpsTexte,
+		CorpsHTML:       r.CorpsHTML,
 	}
 }
 
 // emailInsert est la charge utile d'insertion d'un Email : uniquement les
-// colonnes fournies par l'appelant (id/created_at sont générés par la base).
+// colonnes fournies par l'appelant.
 type emailInsert struct {
-	MessageID            *string   `json:"message_id,omitempty"`
-	DateReception        time.Time `json:"date_reception"`
-	ExpediteurEmail      string    `json:"expediteur_email"`
-	ExpediteurPersonneID *int64    `json:"expediteur_personne_id,omitempty"`
-	Objet                *string   `json:"objet,omitempty"`
-	CorpsTexte           *string   `json:"corps_texte,omitempty"`
-	CorpsHTML            *string   `json:"corps_html,omitempty"`
-	CoproprieteID        *int64    `json:"copropriete_id,omitempty"`
-	LotID                *int64    `json:"lot_id,omitempty"`
-	StatutTraitementID   int64     `json:"statut_traitement_id"`
+	TicketSourceID  int64   `json:"ticket_source_id"`
+	MessageID       *string `json:"message_id,omitempty"`
+	ExpediteurEmail string  `json:"expediteur_email"`
+	Objet           *string `json:"objet,omitempty"`
+	CorpsTexte      *string `json:"corps_texte,omitempty"`
+	CorpsHTML       *string `json:"corps_html,omitempty"`
 }
 
-// InsertEmail insère un nouvel Email et retourne la ligne créée (avec son ID
-// et son created_at générés par la base). e.StatutTraitementID doit être
-// renseigné explicitement par l'appelant (pas de valeur par défaut en base).
-func (c *Client) InsertEmail(ctx context.Context, e *domain.Email) (*domain.Email, error) {
+// InsertEmail insère une nouvelle TicketSource (type "email") et sa table
+// détail Email, et retourne les deux lignes créées. source.TypeID est
+// ignoré et toujours résolu ici (l'appelant ne le fournit pas).
+//
+// Deux écritures liées (ticket_source puis email) via deux appels REST
+// séquentiels plutôt qu'une transaction : conforme à CLAUDE.md pour le cas
+// général (RPC plpgsql) uniquement quand un vrai appelant a besoin
+// d'atomicité — aucun ne l'exige encore ici (worker-email ne persiste pas
+// encore, cf. cmd/worker-email). À revoir en RPC si un échec partiel
+// (ticket_source créée sans son email) devient un risque réel une fois ce
+// chemin d'écriture branché.
+func (c *Client) InsertEmail(ctx context.Context, source *domain.TicketSource, e *domain.Email) (*domain.TicketSource, *domain.Email, error) {
+	typeID, err := c.TicketSourceTypeID(ctx, domain.TicketSourceTypeEmail)
+	if err != nil {
+		return nil, nil, fmt.Errorf("repository: insertion email: résolution du type de source: %w", err)
+	}
+	source.TypeID = typeID
+
+	createdSource, err := c.InsertTicketSource(ctx, source)
+	if err != nil {
+		return nil, nil, fmt.Errorf("repository: insertion email (expediteur=%s): %w", e.ExpediteurEmail, err)
+	}
+
 	payload := []emailInsert{{
-		MessageID:            e.MessageID,
-		DateReception:        e.DateReception,
-		ExpediteurEmail:      e.ExpediteurEmail,
-		ExpediteurPersonneID: e.ExpediteurPersonneID,
-		Objet:                e.Objet,
-		CorpsTexte:           e.CorpsTexte,
-		CorpsHTML:            e.CorpsHTML,
-		CoproprieteID:        e.CoproprieteID,
-		LotID:                e.LotID,
-		StatutTraitementID:   e.StatutTraitementID,
+		TicketSourceID:  createdSource.ID,
+		MessageID:       e.MessageID,
+		ExpediteurEmail: e.ExpediteurEmail,
+		Objet:           e.Objet,
+		CorpsTexte:      e.CorpsTexte,
+		CorpsHTML:       e.CorpsHTML,
 	}}
 	var rows []emailRow
 	if err := c.doWithPrefer(ctx, http.MethodPost, "/email", payload, "return=representation", &rows); err != nil {
-		return nil, fmt.Errorf("repository: insertion email (expediteur=%s): %w", e.ExpediteurEmail, err)
+		return nil, nil, fmt.Errorf("repository: insertion email (expediteur=%s): %w", e.ExpediteurEmail, err)
 	}
 	if len(rows) != 1 {
-		return nil, fmt.Errorf("repository: insertion email (expediteur=%s): %d ligne(s) retournée(s), 1 attendue", e.ExpediteurEmail, len(rows))
+		return nil, nil, fmt.Errorf("repository: insertion email (expediteur=%s): %d ligne(s) retournée(s), 1 attendue", e.ExpediteurEmail, len(rows))
 	}
-	return rows[0].toDomain(), nil
+	return createdSource, rows[0].toDomain(), nil
 }
 
 // FindEmailByMessageID cherche un Email déjà enregistré par son Message-ID
@@ -104,12 +97,14 @@ func (c *Client) FindEmailByMessageID(ctx context.Context, messageID string) (*d
 	return rows[0].toDomain(), nil
 }
 
-// DeleteEmail supprime un Email par son ID (utilisé notamment par les tests
-// d'intégration pour nettoyer après eux).
-func (c *Client) DeleteEmail(ctx context.Context, id int64) error {
-	path := fmt.Sprintf("/email?id=eq.%d", id)
+// DeleteEmail supprime la ligne détail Email par son TicketSourceID
+// (utilisé notamment par les tests d'intégration pour nettoyer après eux).
+// Ne supprime pas la TicketSource elle-même — cf. DeleteTicketSource, qui
+// supprime les deux (ON DELETE CASCADE).
+func (c *Client) DeleteEmail(ctx context.Context, ticketSourceID int64) error {
+	path := fmt.Sprintf("/email?ticket_source_id=eq.%d", ticketSourceID)
 	if err := c.do(ctx, http.MethodDelete, path, nil, nil); err != nil {
-		return fmt.Errorf("repository: suppression email id=%d: %w", id, err)
+		return fmt.Errorf("repository: suppression email ticket_source_id=%d: %w", ticketSourceID, err)
 	}
 	return nil
 }

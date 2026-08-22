@@ -35,10 +35,16 @@ type TicketStatut struct {
 // nullable partagées par tous les types juste pour les besoins de
 // quelques-uns (même choix de conception que pour domain.Role).
 //
-// ActionID vit ici, sur Ticket, et pas sur Email : un même e-mail peut
-// donner lieu à plusieurs demandes distinctes (cf. email.routerVersActions),
-// donc à plusieurs Ticket — Email ne porte que ce qui est déterminé une
-// seule fois par e-mail (CoproprieteID/LotID), pas l'action.
+// ActionID vit ici, sur Ticket, et pas sur TicketSource : un même e-mail
+// (ou autre source) peut donner lieu à plusieurs demandes distinctes (cf.
+// email.routerVersActions), donc à plusieurs Ticket — TicketSource ne porte
+// que ce qui est déterminé une seule fois par source (CoproprieteID/LotID),
+// pas l'action.
+//
+// SourceID est NOT NULL : tout Ticket a une TicketSource, y compris une
+// saisie manuelle (type "manuel", cf. domain.TicketSourceType) — pas de
+// champ Declarant séparé, la personne à l'origine se lit sur
+// TicketSource.PersonneID (via SourceID).
 type Ticket struct {
 	ID              int64
 	CreatedAt       time.Time
@@ -46,10 +52,9 @@ type Ticket struct {
 	ActionID        int64  // FK -> action.id, NOT NULL
 	SousActionID    *int64 // FK -> sous_action.id
 	StatutID        int64  // FK -> ticket_statut.id, NOT NULL : à fixer explicitement à l'insertion
-	EmailOrigineID  *int64 // FK -> email.id, si déclenché par un e-mail
+	SourceID        int64  // FK -> ticket_source.id, NOT NULL
 	CoproprieteID   int64  // FK -> copropriete.id, NOT NULL
 	LotID           *int64 // FK -> lot.id, nul = partie commune
-	DeclarantID     *int64 // FK -> personne.id
 	AssigneA        *int64 // FK -> personne.id (collaborateur en charge)
 	CreePar         *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
 	DateDeclaration time.Time
