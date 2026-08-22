@@ -163,20 +163,23 @@ func referenceDuCandidat(candidats []domain.CandidatCopropriete, id int64) (stri
 // dédupliquées par CoproprieteID (une même copropriete peut apparaître
 // sous plusieurs rôles : ses Roles cumulent alors les rôles concernés).
 //
-// Limitation connue : Coproprietes (occupant/coproprietaire) vient de
-// Lots, qui ne distingue pas occupant de coproprietaire au niveau du lot
-// (cf. doc de Contexte) — chaque copropriete de cette liste se voit donc
-// attribuer tous les rôles parmi {occupant, coproprietaire} présents
-// globalement chez la Personne, pas seulement celui réellement associé à
-// ce lot précis.
+// RolesCopropriete (vue personne_role) associe déjà chaque rôle scopé à sa
+// copropriete précise (occupant/coproprietaire/prestataire/conseil_syndical) —
+// contrairement à l'ancienne dérivation depuis Lots/Contrats, aucune
+// approximation ici : un rôle n'est attribué à une copropriete que s'il lui
+// est réellement associé.
 func candidatsCoproprietes(ec *Contexte) []domain.CandidatCopropriete {
 	index := make(map[int64]*domain.CandidatCopropriete)
 	var ordre []int64
 
-	ajouter := func(id int64, nom *string, reference string, role domain.Role) {
+	ajouter := func(id int64, nom, reference *string, role domain.Role) {
 		c, ok := index[id]
 		if !ok {
-			c = &domain.CandidatCopropriete{CoproprieteID: id, CoproprieteNom: nom, CoproprieteReference: reference}
+			ref := ""
+			if reference != nil {
+				ref = *reference
+			}
+			c = &domain.CandidatCopropriete{CoproprieteID: id, CoproprieteNom: nom, CoproprieteReference: ref}
 			index[id] = c
 			ordre = append(ordre, id)
 		}
@@ -188,24 +191,16 @@ func candidatsCoproprietes(ec *Contexte) []domain.CandidatCopropriete {
 		c.Roles = append(c.Roles, role)
 	}
 
-	occupant, coproprietaire := ec.ARole(domain.RoleOccupant), ec.ARole(domain.RoleCoproprietaire)
-	if occupant || coproprietaire {
-		for _, cop := range ec.Coproprietes {
-			if occupant {
-				ajouter(cop.CoproprieteID, cop.CoproprieteNom, cop.CoproprieteReference, domain.RoleOccupant)
-			}
-			if coproprietaire {
-				ajouter(cop.CoproprieteID, cop.CoproprieteNom, cop.CoproprieteReference, domain.RoleCoproprietaire)
-			}
+	for _, lc := range ec.RolesCopropriete {
+		if lc.CoproprieteID == nil {
+			continue // rôle intrinsèque non scopé (gestionnaire, sys_admin...) — géré séparément ci-dessous pour gestionnaire
 		}
+		ajouter(*lc.CoproprieteID, lc.CoproprieteNom, lc.CoproprieteReference, domain.Role(lc.Role))
 	}
 
 	for _, cop := range ec.CoproprietesGestion {
-		ajouter(cop.CoproprieteID, cop.CoproprieteNom, cop.CoproprieteReference, domain.RoleGestionnaire)
-	}
-
-	for _, contrat := range ec.Contrats {
-		ajouter(contrat.CoproprieteID, contrat.CoproprieteNom, contrat.CoproprieteReference, domain.RolePrestataire)
+		ref := cop.CoproprieteReference
+		ajouter(cop.CoproprieteID, cop.CoproprieteNom, &ref, domain.RoleGestionnaire)
 	}
 
 	candidats := make([]domain.CandidatCopropriete, 0, len(ordre))

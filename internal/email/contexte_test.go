@@ -9,13 +9,13 @@ import (
 )
 
 type fakeRepo struct {
-	personnes               map[string]*domain.Personne // par email
-	personnesPhysique       map[int64]*domain.PersonnePhysique
-	personnesMorale         map[int64]*domain.PersonneMorale
-	lots                    map[int64][]repository.LotAssocie
-	contrats                map[int64][]repository.ContratAssocie
-	coproprietesGerees      map[int64][]repository.CoproprieteAssociee
-	coproprietesConseilSynd map[int64][]repository.CoproprieteAssociee
+	personnes          map[string]*domain.Personne // par email
+	personnesPhysique  map[int64]*domain.PersonnePhysique
+	personnesMorale    map[int64]*domain.PersonneMorale
+	lots               map[int64][]repository.LotAssocie
+	contrats           map[int64][]repository.ContratAssocie
+	coproprietesGerees map[int64][]repository.CoproprieteAssociee
+	roles              map[int64][]repository.PersonneRoleAssociee
 }
 
 func (f *fakeRepo) FindPersonneByEmail(_ context.Context, email string) (*domain.Personne, error) {
@@ -42,8 +42,8 @@ func (f *fakeRepo) ListCoproprietesParGestionnaire(_ context.Context, personneID
 	return f.coproprietesGerees[personneID], nil
 }
 
-func (f *fakeRepo) ListCoproprietesConseilSyndicalParPersonne(_ context.Context, personneID int64) ([]repository.CoproprieteAssociee, error) {
-	return f.coproprietesConseilSynd[personneID], nil
+func (f *fakeRepo) ListRolesParPersonne(_ context.Context, personneID int64) ([]repository.PersonneRoleAssociee, error) {
+	return f.roles[personneID], nil
 }
 
 func TestEnrichirExpediteurInconnu(t *testing.T) {
@@ -64,6 +64,7 @@ func TestEnrichirExpediteurInconnu(t *testing.T) {
 func TestEnrichirExpediteurOccupantEtCoproprietaire(t *testing.T) {
 	vrai := true
 	nom := "Dupont"
+	nomCop := "COP1"
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
 			"jean@example.com": {ID: 1, EstPhysique: &vrai, Reference: "PER1"},
@@ -75,6 +76,12 @@ func TestEnrichirExpediteurOccupantEtCoproprietaire(t *testing.T) {
 			// Propriétaire occupant de son propre lot : les deux rôles
 			// viennent du même lot.
 			1: {{LotID: 100, LotReference: "LOT1", CoproprieteReference: "COP1", EstProprietaire: &vrai, EstOccupant: &vrai}},
+		},
+		roles: map[int64][]repository.PersonneRoleAssociee{
+			1: {
+				{Role: "occupant", CoproprieteID: int64Ptr(1), CoproprieteReference: &nomCop},
+				{Role: "coproprietaire", CoproprieteID: int64Ptr(1), CoproprieteReference: &nomCop},
+			},
 		},
 	}
 
@@ -97,8 +104,8 @@ func TestEnrichirExpediteurOccupantEtCoproprietaire(t *testing.T) {
 	if len(ctx.Lots) != 1 || ctx.Lots[0].LotReference != "LOT1" {
 		t.Errorf("Lots = %+v", ctx.Lots)
 	}
-	if len(ctx.Coproprietes) != 1 || ctx.Coproprietes[0].CoproprieteReference != "COP1" {
-		t.Errorf("Coproprietes = %+v", ctx.Coproprietes)
+	if len(ctx.RolesCopropriete) != 2 {
+		t.Errorf("RolesCopropriete = %+v, attendu 2 lignes (occupant + coproprietaire sur COP1)", ctx.RolesCopropriete)
 	}
 	// Personne physique : pas de requête contrats (gated sur PersonneMorale != nil).
 	if ctx.Contrats != nil {
@@ -111,6 +118,7 @@ func TestEnrichirExpediteurOccupantEtCoproprietaire(t *testing.T) {
 
 func TestEnrichirExpediteurCoproprietesDedupliquees(t *testing.T) {
 	vrai := true
+	cop1, cop2 := "COP1", "COP2"
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
 			"proprio@example.com": {ID: 6, EstPhysique: &vrai, Reference: "PER6"},
@@ -122,6 +130,15 @@ func TestEnrichirExpediteurCoproprietesDedupliquees(t *testing.T) {
 				{LotID: 200, LotReference: "LOT3", CoproprieteID: 2, CoproprieteReference: "COP2", EstProprietaire: &vrai},
 			},
 		},
+		roles: map[int64][]repository.PersonneRoleAssociee{
+			// La vue personne_role déduplique déjà par (personne, role,
+			// copropriete) : un seul rôle coproprietaire par copropriete,
+			// même si plusieurs lots y sont détenus.
+			6: {
+				{Role: "coproprietaire", CoproprieteID: int64Ptr(1), CoproprieteReference: &cop1},
+				{Role: "coproprietaire", CoproprieteID: int64Ptr(2), CoproprieteReference: &cop2},
+			},
+		},
 	}
 
 	ctx, err := EnrichirExpediteur(context.Background(), repo, "proprio@example.com")
@@ -131,13 +148,15 @@ func TestEnrichirExpediteurCoproprietesDedupliquees(t *testing.T) {
 	if len(ctx.Lots) != 3 {
 		t.Fatalf("Lots = %+v, attendu 3 (pas de déduplication sur les lots)", ctx.Lots)
 	}
-	if len(ctx.Coproprietes) != 2 {
-		t.Fatalf("Coproprietes = %+v, attendu 2 (dédupliquées : COP1 x2 lots -> 1 entrée)", ctx.Coproprietes)
+	candidats := candidatsCoproprietes(ctx)
+	if len(candidats) != 2 {
+		t.Fatalf("candidatsCoproprietes = %+v, attendu 2 (dédupliquées : COP1 x2 lots -> 1 entrée)", candidats)
 	}
 }
 
 func TestEnrichirExpediteurPrestataireAvecContrats(t *testing.T) {
 	faux := false
+	cop1 := "COP1"
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
 			"contact@prestataire.example": {ID: 2, EstPhysique: &faux, Reference: "PER2"},
@@ -147,6 +166,9 @@ func TestEnrichirExpediteurPrestataireAvecContrats(t *testing.T) {
 		},
 		contrats: map[int64][]repository.ContratAssocie{
 			2: {{ContratID: 200, NumeroContrat: strPtr("CTR-1"), CoproprieteID: 1, CoproprieteReference: "COP1"}},
+		},
+		roles: map[int64][]repository.PersonneRoleAssociee{
+			2: {{Role: "prestataire", CoproprieteID: int64Ptr(1), CoproprieteReference: &cop1}},
 		},
 	}
 
@@ -177,7 +199,7 @@ func TestEnrichirExpediteurPersonneMoraleSansContratNestPasPrestataire(t *testin
 		personnesMorale: map[int64]*domain.PersonneMorale{
 			7: {ID: 70, EstCabinetGestion: boolPtr(true)},
 		},
-		// Aucun contrat pour cette personne_id dans la fake.
+		// Aucun rôle pour cette personne_id dans la fake (pas de contrat en base).
 	}
 
 	ctx, err := EnrichirExpediteur(context.Background(), repo, "cabinet@example.com")
@@ -203,6 +225,11 @@ func TestEnrichirExpediteurGestionnaireAvecCoproprietes(t *testing.T) {
 		coproprietesGerees: map[int64][]repository.CoproprieteAssociee{
 			3: {{CoproprieteID: 1, CoproprieteNom: &nomCop, CoproprieteReference: "COP1"}},
 		},
+		roles: map[int64][]repository.PersonneRoleAssociee{
+			// gestionnaire est un rôle intrinsèque, non scopé à une
+			// copropriete en particulier (cf. personne_role : copropriete_id NULL).
+			3: {{Role: "gestionnaire"}},
+		},
 	}
 
 	ctx, err := EnrichirExpediteur(context.Background(), repo, "martin@cabinet.example")
@@ -219,12 +246,20 @@ func TestEnrichirExpediteurGestionnaireAvecCoproprietes(t *testing.T) {
 
 func TestEnrichirExpediteurPlusieursRoles(t *testing.T) {
 	vrai := true
+	cop1 := "COP1"
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
 			"multi@example.com": {ID: 4, EstPhysique: &vrai, EstGestionnaire: &vrai},
 		},
 		lots: map[int64][]repository.LotAssocie{
 			4: {{LotID: 400, LotReference: "LOT4", CoproprieteReference: "COP1", EstProprietaire: &vrai, EstOccupant: &vrai}},
+		},
+		roles: map[int64][]repository.PersonneRoleAssociee{
+			4: {
+				{Role: "occupant", CoproprieteID: int64Ptr(1), CoproprieteReference: &cop1},
+				{Role: "coproprietaire", CoproprieteID: int64Ptr(1), CoproprieteReference: &cop1},
+				{Role: "gestionnaire"},
+			},
 		},
 	}
 
@@ -260,10 +295,10 @@ func TestEnrichirExpediteurConnuSansRole(t *testing.T) {
 	if len(ctx.Roles) != 0 {
 		t.Errorf("Roles = %+v, attendu vide", ctx.Roles)
 	}
-	// Lots et Contrats sont désormais toujours interrogés (pour dériver
-	// occupant/coproprietaire/prestataire), mais reviennent vides ici faute
-	// de données dans la fake ; CoproprietesGestion reste conditionné à
-	// RoleGestionnaire (booléen direct), donc jamais interrogé ici.
+	// Lots et Contrats sont toujours interrogés (détail, indépendant des
+	// rôles), mais reviennent vides ici faute de données dans la fake ;
+	// CoproprietesGestion reste conditionné à RoleGestionnaire, donc jamais
+	// interrogé ici.
 	if ctx.Contrats != nil || ctx.Lots != nil {
 		t.Errorf("attendu Contrats/Lots vides (aucune donnée) : Contrats=%+v Lots=%+v", ctx.Contrats, ctx.Lots)
 	}
@@ -282,8 +317,11 @@ func TestEnrichirExpediteurMembreConseilSyndical(t *testing.T) {
 		lots: map[int64][]repository.LotAssocie{
 			1: {{LotID: 100, LotReference: "LOT1", CoproprieteID: 1, CoproprieteReference: "COP1", EstProprietaire: &vrai}},
 		},
-		coproprietesConseilSynd: map[int64][]repository.CoproprieteAssociee{
-			1: {{CoproprieteID: 1, CoproprieteNom: &nomCop, CoproprieteReference: "COP1"}},
+		roles: map[int64][]repository.PersonneRoleAssociee{
+			1: {
+				{Role: "coproprietaire", CoproprieteID: int64Ptr(1), CoproprieteReference: &nomCop},
+				{Role: "conseil_syndical", CoproprieteID: int64Ptr(1), CoproprieteReference: &nomCop},
+			},
 		},
 	}
 
@@ -294,19 +332,20 @@ func TestEnrichirExpediteurMembreConseilSyndical(t *testing.T) {
 	if !ctx.ARole(domain.RoleCoproprietaire) || !ctx.ARole(domain.RoleConseilSyndical) {
 		t.Errorf("Roles = %+v, attendu coproprietaire ET conseil_syndical", ctx.Roles)
 	}
-	if len(ctx.CoproprietesConseilSyndical) != 1 || ctx.CoproprietesConseilSyndical[0].CoproprieteReference != "COP1" {
-		t.Errorf("CoproprietesConseilSyndical = %+v", ctx.CoproprietesConseilSyndical)
-	}
 }
 
 func TestEnrichirExpediteurCoproprietaireSansMandatConseilSyndical(t *testing.T) {
 	vrai := true
+	cop1 := "COP1"
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
 			"proprio@example.com": {ID: 1, EstPhysique: &vrai, Reference: "PER1"},
 		},
 		lots: map[int64][]repository.LotAssocie{
 			1: {{LotID: 100, LotReference: "LOT1", CoproprieteID: 1, CoproprieteReference: "COP1", EstProprietaire: &vrai}},
+		},
+		roles: map[int64][]repository.PersonneRoleAssociee{
+			1: {{Role: "coproprietaire", CoproprieteID: int64Ptr(1), CoproprieteReference: &cop1}},
 		},
 	}
 
@@ -317,13 +356,11 @@ func TestEnrichirExpediteurCoproprietaireSansMandatConseilSyndical(t *testing.T)
 	if ctx.ARole(domain.RoleConseilSyndical) {
 		t.Errorf("Roles = %+v, attendu pas conseil_syndical (aucun mandat actif)", ctx.Roles)
 	}
-	if ctx.CoproprietesConseilSyndical != nil {
-		t.Errorf("CoproprietesConseilSyndical = %+v, attendu nil", ctx.CoproprietesConseilSyndical)
-	}
 }
 
-func TestEnrichirExpediteurNonCoproprietairePasDeRequeteConseilSyndical(t *testing.T) {
+func TestEnrichirExpediteurNonCoproprietairePasDeConseilSyndical(t *testing.T) {
 	vrai := true
+	cop1 := "COP1"
 	repo := &fakeRepo{
 		personnes: map[string]*domain.Personne{
 			"locataire@example.com": {ID: 1, EstPhysique: &vrai, Reference: "PER1"},
@@ -332,10 +369,8 @@ func TestEnrichirExpediteurNonCoproprietairePasDeRequeteConseilSyndical(t *testi
 			// Occupant, mais pas propriétaire : pas coproprietaire.
 			1: {{LotID: 100, LotReference: "LOT1", CoproprieteID: 1, CoproprieteReference: "COP1", EstOccupant: &vrai}},
 		},
-		// Si EnrichirExpediteur interrogeait quand même le conseil syndical
-		// pour un simple occupant (non coproprietaire), ce mandat serait vu à tort.
-		coproprietesConseilSynd: map[int64][]repository.CoproprieteAssociee{
-			1: {{CoproprieteID: 1, CoproprieteReference: "COP1"}},
+		roles: map[int64][]repository.PersonneRoleAssociee{
+			1: {{Role: "occupant", CoproprieteID: int64Ptr(1), CoproprieteReference: &cop1}},
 		},
 	}
 

@@ -69,11 +69,12 @@ func TestDetermineCoproprieteAucunCandidat(t *testing.T) {
 }
 
 func TestDetermineCoproprieteUnSeulCandidatCoproprietaire(t *testing.T) {
+	cop1 := "COP1"
 	ec := &Contexte{
 		Connu: true,
 		Roles: []domain.Role{domain.RoleCoproprietaire},
-		Coproprietes: []repository.CoproprieteAssociee{
-			{CoproprieteID: 1, CoproprieteReference: "COP1"},
+		RolesCopropriete: []repository.PersonneRoleAssociee{
+			{Role: "coproprietaire", CoproprieteID: int64Ptr(1), CoproprieteReference: &cop1},
 		},
 	}
 
@@ -96,11 +97,13 @@ func TestDetermineCoproprieteUnSeulCandidatMultiRoles(t *testing.T) {
 	// Coproprietaire ET occupant de la même (et unique) copropriete : un seul
 	// candidat malgré 2 rôles -> toujours facile, mais Role reste
 	// indéterminé (ambigu entre les 2 rôles du même candidat).
+	cop1 := "COP1"
 	ec := &Contexte{
 		Connu: true,
 		Roles: []domain.Role{domain.RoleCoproprietaire, domain.RoleOccupant},
-		Coproprietes: []repository.CoproprieteAssociee{
-			{CoproprieteID: 1, CoproprieteReference: "COP1"},
+		RolesCopropriete: []repository.PersonneRoleAssociee{
+			{Role: "coproprietaire", CoproprieteID: int64Ptr(1), CoproprieteReference: &cop1},
+			{Role: "occupant", CoproprieteID: int64Ptr(1), CoproprieteReference: &cop1},
 		},
 	}
 
@@ -301,11 +304,12 @@ func TestDetermineCoproprieteRepoLogAbsentNePanicPas(t *testing.T) {
 func TestCandidatsCoproprieteFusionRoles(t *testing.T) {
 	// Même copropriete via 2 sources différentes (lots ET gestion) : un
 	// seul candidat, avec les 2 rôles cumulés.
+	cop1 := "COP1"
 	ec := &Contexte{
 		Connu: true,
 		Roles: []domain.Role{domain.RoleCoproprietaire, domain.RoleGestionnaire},
-		Coproprietes: []repository.CoproprieteAssociee{
-			{CoproprieteID: 1, CoproprieteReference: "COP1"},
+		RolesCopropriete: []repository.PersonneRoleAssociee{
+			{Role: "coproprietaire", CoproprieteID: int64Ptr(1), CoproprieteReference: &cop1},
 		},
 		CoproprietesGestion: []repository.CoproprieteAssociee{
 			{CoproprieteID: 1, CoproprieteReference: "COP1"},

@@ -21,25 +21,24 @@ import (
 // dans ce cas.
 //
 // Une Personne peut cumuler plusieurs Role à la fois (cf. domain.Role) :
-// Roles liste tous les rôles applicables, jamais un seul. Lots et Contrats
-// sont désormais toujours interrogés pour toute Personne connue (pas
-// seulement quand un rôle laisse présager leur pertinence) : occupant,
-// coproprietaire et prestataire sont dérivés de leur contenu plutôt que de
-// booléens sur Personne/PersonneMorale, donc il faut les avoir en main
-// avant même de calculer Roles (cf. rolesDe). CoproprietesGestion reste
-// conditionné à RoleGestionnaire (booléen direct, pas de dérivation
-// nécessaire).
+// Roles liste tous les rôles applicables, jamais un seul. RolesCopropriete
+// vient de la vue SQL personne_role (cf. repository.ListRolesParPersonne) —
+// c'est elle qui dérive occupant/coproprietaire/prestataire/conseil_syndical
+// (et lit gestionnaire/sys_admin/comptable/direction), la même vue que
+// celle utilisée par les policies RLS : une seule dérivation, partagée.
+// Lots/Contrats restent interrogés séparément : ils portent un détail
+// (référence de lot, numéro de contrat...) que la vue ne porte pas, pas les
+// rôles eux-mêmes.
 type Contexte struct {
-	Connu                       bool
-	Personne                    *domain.Personne
-	PersonnePhysique            *domain.PersonnePhysique         // renseigné si Personne.EstPhysique est vrai
-	PersonneMorale              *domain.PersonneMorale           // renseigné si Personne.EstPhysique est faux
-	Roles                       []domain.Role                    // tous les rôles applicables (occupant, coproprietaire, prestataire, gestionnaire, conseil_syndical) — peut être vide si aucun
-	Lots                        []repository.LotAssocie          // tous les lots associés à Personne, quel que soit son rôle
-	Coproprietes                []repository.CoproprieteAssociee // coproprietes des Lots ci-dessus, dédupliquées
-	CoproprietesGestion         []repository.CoproprieteAssociee // coproprietes gérées par Personne (pertinent pour RoleGestionnaire)
-	CoproprietesConseilSyndical []repository.CoproprieteAssociee // coproprietes où Personne a un mandat actif de membre du conseil syndical (pertinent pour RoleConseilSyndical) — toujours un sous-ensemble de Coproprietes, seul un copropriétaire pouvant y siéger
-	Contrats                    []repository.ContratAssocie      // contrats où Personne (morale) est l'entreprise, avec leur copropriete ; non vide <=> RolePrestataire
+	Connu               bool
+	Personne            *domain.Personne
+	PersonnePhysique    *domain.PersonnePhysique          // renseigné si Personne.EstPhysique est vrai
+	PersonneMorale      *domain.PersonneMorale            // renseigné si Personne.EstPhysique est faux
+	Roles               []domain.Role                     // tous les rôles applicables (occupant, coproprietaire, prestataire, gestionnaire, conseil_syndical...) — peut être vide si aucun
+	RolesCopropriete    []repository.PersonneRoleAssociee // détail rôle+copropriete (vue personne_role), utilisé pour un rattachement précis (cf. candidatsCoproprietes)
+	Lots                []repository.LotAssocie           // tous les lots associés à Personne, quel que soit son rôle — détail (référence de lot...), pas la source de vérité des rôles
+	CoproprietesGestion []repository.CoproprieteAssociee  // coproprietes gérées par Personne (copropriete_collaborateur_map) — routage informatif, pas un droit d'accès (cf. RLS : un gestionnaire voit toutes les coproprietes, pas seulement celles-ci)
+	Contrats            []repository.ContratAssocie       // contrats où Personne (morale) est l'entreprise, avec leur copropriete ; non vide <=> RolePrestataire
 }
 
 // ARole indique si Roles contient le rôle donné.
@@ -61,7 +60,7 @@ type contexteRepo interface {
 	ListLotsParPersonne(ctx context.Context, personneID int64) ([]repository.LotAssocie, error)
 	ListContratsParPrestataire(ctx context.Context, entrepriseID int64) ([]repository.ContratAssocie, error)
 	ListCoproprietesParGestionnaire(ctx context.Context, personneID int64) ([]repository.CoproprieteAssociee, error)
-	ListCoproprietesConseilSyndicalParPersonne(ctx context.Context, personneID int64) ([]repository.CoproprieteAssociee, error)
+	ListRolesParPersonne(ctx context.Context, personneID int64) ([]repository.PersonneRoleAssociee, error)
 }
 
 // EnrichirExpediteur recherche l'expéditeur d'un e-mail par son adresse et
@@ -94,20 +93,17 @@ func EnrichirExpediteur(ctx context.Context, repo contexteRepo, adresseEmail str
 		c.PersonneMorale = pm
 	}
 
-	// Occupant/coproprietaire n'étant plus des booléens sur Personne (cf.
-	// domain.Role), il faut d'abord interroger les lots pour les déduire —
-	// systématiquement, pas seulement quand un indice laissait présager un
-	// rôle : un appel réseau de plus par e-mail, accepté au profit d'une
-	// seule source de vérité (LotPersonneMap), sans risque de désync.
+	// Détail des lots (référence, étage...) — pas la source de vérité des
+	// rôles (cf. RolesCopropriete), mais utilisé plus loin dans le pipeline
+	// (router.go) pour lister les lots concernés par la copropriete retenue.
 	lots, err := repo.ListLotsParPersonne(ctx, personne.ID)
 	if err != nil {
 		return nil, fmt.Errorf("email: recherche des lots associés à %s (personne id=%d): %w", adresseEmail, personne.ID, err)
 	}
 	c.Lots = lots
-	c.Coproprietes = coproprietesDeLots(lots)
 
-	// Idem pour prestataire (personne morale uniquement) : dérivé de
-	// contrat.entreprise_id plutôt que d'un booléen sur personne_morale.
+	// Idem pour les contrats (personne morale uniquement) : détail (numéro
+	// de contrat...), pas la source de vérité de RolePrestataire.
 	if c.PersonneMorale != nil {
 		contrats, err := repo.ListContratsParPrestataire(ctx, personne.ID)
 		if err != nil {
@@ -116,21 +112,17 @@ func EnrichirExpediteur(ctx context.Context, repo contexteRepo, adresseEmail str
 		c.Contrats = contrats
 	}
 
-	c.Roles = rolesDe(personne, lots, c.Contrats)
-
-	// Seul un copropriétaire (RoleCoproprietaire) peut siéger au conseil syndical :
-	// pas la peine d'interroger conseil_syndical_mandat sinon.
-	if c.ARole(domain.RoleCoproprietaire) {
-		coproprietesCS, err := repo.ListCoproprietesConseilSyndicalParPersonne(ctx, personne.ID)
-		if err != nil {
-			return nil, fmt.Errorf("email: recherche des mandats de conseil syndical de %s (personne id=%d): %w", adresseEmail, personne.ID, err)
-		}
-		if len(coproprietesCS) > 0 {
-			c.CoproprietesConseilSyndical = coproprietesCS
-			c.Roles = append(c.Roles, domain.RoleConseilSyndical)
-		}
+	rolesCopropriete, err := repo.ListRolesParPersonne(ctx, personne.ID)
+	if err != nil {
+		return nil, fmt.Errorf("email: recherche des rôles de %s (personne id=%d): %w", adresseEmail, personne.ID, err)
 	}
+	c.RolesCopropriete = rolesCopropriete
+	c.Roles = rolesDistincts(rolesCopropriete)
 
+	// CoproprietesGestion reste une requête séparée : elle vient de
+	// copropriete_collaborateur_map (assignation de routage), pas de
+	// personne_role (qui ne scope pas gestionnaire à une copropriete en
+	// particulier — cf. RLS, un gestionnaire a accès à tout).
 	if c.ARole(domain.RoleGestionnaire) {
 		coproprietes, err := repo.ListCoproprietesParGestionnaire(ctx, personne.ID)
 		if err != nil {
@@ -142,58 +134,22 @@ func EnrichirExpediteur(ctx context.Context, repo contexteRepo, adresseEmail str
 	return c, nil
 }
 
-// rolesDe déduit tous les Role applicables à une Personne : RoleGestionnaire
-// reste lu directement sur un booléen (Personne.EstGestionnaire) ;
-// RoleOccupant/RoleCoproprietaire sont déduits de lots (au moins un lot où
-// LotAssocie.EstOccupant/EstProprietaire est vrai) et RolePrestataire de
-// contrats (non vide) — cf. domain.Role pour le détail de ce choix de
-// conception. Peut retourner une liste vide (personne connue mais aucun
-// rôle particulier).
-func rolesDe(personne *domain.Personne, lots []repository.LotAssocie, contrats []repository.ContratAssocie) []domain.Role {
+// rolesDistincts déduplique les Role présents dans une liste de
+// PersonneRoleAssociee (une même Personne peut avoir plusieurs lignes pour
+// un même rôle, une par copropriete concernée), dans leur ordre de première
+// apparition.
+func rolesDistincts(lignes []repository.PersonneRoleAssociee) []domain.Role {
 	var roles []domain.Role
-
-	var estOccupant, estCoproprietaire bool
-	for _, lot := range lots {
-		if lot.EstOccupant != nil && *lot.EstOccupant {
-			estOccupant = true
-		}
-		if lot.EstProprietaire != nil && *lot.EstProprietaire {
-			estCoproprietaire = true
-		}
-	}
-	if estOccupant {
-		roles = append(roles, domain.RoleOccupant)
-	}
-	if estCoproprietaire {
-		roles = append(roles, domain.RoleCoproprietaire)
-	}
-	if len(contrats) > 0 {
-		roles = append(roles, domain.RolePrestataire)
-	}
-	if personne.EstGestionnaire != nil && *personne.EstGestionnaire {
-		roles = append(roles, domain.RoleGestionnaire)
-	}
-	return roles
-}
-
-// coproprietesDeLots déduplique les coproprietes présentes dans une liste de
-// LotAssocie (une même copropriete peut apparaître sur plusieurs lots),
-// dans leur ordre de première apparition.
-func coproprietesDeLots(lots []repository.LotAssocie) []repository.CoproprieteAssociee {
-	var coproprietes []repository.CoproprieteAssociee
-	vues := make(map[int64]bool, len(lots))
-	for _, lot := range lots {
-		if vues[lot.CoproprieteID] {
+	vus := make(map[domain.Role]bool, len(lignes))
+	for _, l := range lignes {
+		r := domain.Role(l.Role)
+		if vus[r] {
 			continue
 		}
-		vues[lot.CoproprieteID] = true
-		coproprietes = append(coproprietes, repository.CoproprieteAssociee{
-			CoproprieteID:        lot.CoproprieteID,
-			CoproprieteNom:       lot.CoproprieteNom,
-			CoproprieteReference: lot.CoproprieteReference,
-		})
+		vus[r] = true
+		roles = append(roles, r)
 	}
-	return coproprietes
+	return roles
 }
 
 // TraiterMessage enrichit le contexte de l'expéditeur d'un Message Gmail
