@@ -10,7 +10,7 @@ Worker d'arrière-plan autonome en Go pour la surveillance des e-mails, l'extrac
   - Ne jamais ignorer d'erreur silencieusement.
   - Logger avec contexte : `log.Printf("Erreur %s: %v", msgID, err)`.
 - **Base de données** :
-  - Accès exclusivement via l'API REST de Supabase (PostgREST), avec la clé `service_role` (`internal/repository`, client `net/http` fait main). Pas de connexion Postgres directe (`pgx`/`database/sql`) depuis l'application — la connexion Postgres directe (`SUPABASE_DB_URL`) sert uniquement aux migrations de schéma, exécutées manuellement.
+  - Accès exclusivement via l'API REST de Supabase (PostgREST), avec la clé `service_role` (`internal/repository`, client `net/http` fait main). Pas de connexion Postgres directe (`pgx`/`database/sql`) depuis l'application — la connexion Postgres directe (`SUPABASE_DB_URL`) sert uniquement aux migrations de schéma. Demander avant de procéder à des modifications importantes, et en particulier avant de supprimer des tables ou des informations.
   - Pour tout traitement impliquant plusieurs écritures liées (ex: insérer un `email` et créer l'`incident` associé), utiliser une fonction Postgres (`plpgsql`) appelée en RPC (`/rest/v1/rpc/...`) plutôt qu'une transaction Go — l'API REST ne permet pas d'ouvrir une transaction à cheval sur plusieurs appels HTTP. La fonction elle-même est du SQL standard, portable hors Supabase.
   - Les ID des tables de référence (catégories, statuts...) ne sont jamais codés en dur : toujours résolus par une recherche sur `description`.
 - **Montants monétaires** : Toujours stocker et manipuler les loyers et charges en entiers représentant les centimes (ex. `125000` pour `1 250,00 €`).
