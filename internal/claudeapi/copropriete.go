@@ -41,8 +41,10 @@ type DecisionCopropriete struct {
 // e-mail y est associé) et du contenu de l'e-mail, sous quel rôle l'e-mail
 // semble avoir été envoyé et à quelle copropriété il se rapporte.
 //
-// N'a de sens que si candidats contient plusieurs entrées : avec 0 ou 1
-// candidat la décision est triviale et ne doit pas passer par ici (cf.
+// N'a de sens que s'il reste une ambiguïté à trancher : soit plusieurs
+// candidats, soit un seul mais avec plusieurs rôles possibles pour lui (ex:
+// occupant ET coproprietaire du même lot) — avec 0 candidat, ou 1 seul et
+// un seul rôle, la décision est triviale et ne doit pas passer par ici (cf.
 // email.DetermineCopropriete, qui gère ces cas sans appel API).
 func (c *Client) DecideCopropriete(ctx context.Context, candidats []domain.CandidatCopropriete, objet, corpsTexte string) (DecisionCopropriete, error) {
 	tool := anthropic.ToolParam{

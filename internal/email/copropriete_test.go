@@ -93,10 +93,11 @@ func TestDetermineCoproprieteUnSeulCandidatCoproprietaire(t *testing.T) {
 	}
 }
 
-func TestDetermineCoproprieteUnSeulCandidatMultiRoles(t *testing.T) {
+func TestDetermineCoproprieteUnSeulCandidatMultiRolesAppelleClaude(t *testing.T) {
 	// Coproprietaire ET occupant de la même (et unique) copropriete : un seul
-	// candidat malgré 2 rôles -> toujours facile, mais Role reste
-	// indéterminé (ambigu entre les 2 rôles du même candidat).
+	// candidat, mais le rôle reste ambigu entre les deux — le contenu de
+	// l'e-mail est nécessaire pour trancher, donc appel à Claude malgré
+	// l'unicité de la copropriété candidate.
 	cop1 := "COP1"
 	ec := &Contexte{
 		Connu: true,
@@ -106,16 +107,26 @@ func TestDetermineCoproprieteUnSeulCandidatMultiRoles(t *testing.T) {
 			{Role: "occupant", CoproprieteID: int64Ptr(1), CoproprieteReference: &cop1},
 		},
 	}
+	cop1ID := int64(1)
+	decideur := &fakeDecideur{decision: claudeapi.DecisionCopropriete{
+		CoproprieteID: &cop1ID, Role: &[]domain.Role{domain.RoleOccupant}[0], Confiance: 0.9, Raison: "parle d'un dégât dans son propre logement",
+	}}
 
-	res, err := DetermineCopropriete(context.Background(), nil, nil, ec, "Objet", "Corps")
+	res, err := DetermineCopropriete(context.Background(), decideur, nil, ec, "Objet", "Corps")
 	if err != nil {
 		t.Fatalf("DetermineCopropriete: %v", err)
+	}
+	if !decideur.appele {
+		t.Fatal("attendu un appel à Claude (rôle ambigu malgré une copropriété candidate unique)")
+	}
+	if len(decideur.candidatsRecus) != 1 {
+		t.Fatalf("candidats reçus par Claude = %+v, attendu 1 (avec ses 2 rôles)", decideur.candidatsRecus)
 	}
 	if res.CoproprieteID == nil || *res.CoproprieteID != 1 {
 		t.Fatalf("résultat = %+v, attendu copropriete id=1", res)
 	}
-	if res.Role != nil {
-		t.Errorf("Role = %v, attendu nil (2 rôles pour ce candidat unique)", res.Role)
+	if res.Role == nil || *res.Role != domain.RoleOccupant {
+		t.Errorf("Role = %v, attendu occupant (tranché par Claude)", res.Role)
 	}
 }
 

@@ -46,12 +46,16 @@ type coproprieteLogRepo interface {
 // rapporte, à partir du Contexte de son expéditeur déjà enrichi (cf.
 // EnrichirExpediteur) et du contenu du message.
 //
-// Cas simple, sans appel à l'API Claude : aucune ou une seule copropriété
-// candidate au total, tous rôles confondus (cf. candidatsCoproprietes).
-// Cas ambigu (plusieurs coproprietes candidates) : appel à Claude pour
-// déterminer (1) sous quel rôle l'e-mail semble avoir été envoyé, et (2)
-// laquelle des coproprietes associées à ce rôle correspond, avec un indice
-// de confiance.
+// Cas simple, sans appel à l'API Claude : aucune copropriété candidate, ou
+// une seule ET un seul rôle possible pour elle (cf. candidatsCoproprietes)
+// — alors rien à désambiguïser, ni sur la copropriété ni sur le rôle.
+// Cas ambigu, avec appel à Claude : soit plusieurs coproprietes candidates,
+// soit une seule mais avec plusieurs rôles possibles pour l'expéditeur
+// (ex: occupant ET coproprietaire du même lot) — dans les deux cas, seul
+// le contenu de l'e-mail permet de trancher. Claude détermine alors (1)
+// sous quel rôle l'e-mail semble avoir été envoyé, et (2) laquelle des
+// coproprietes candidates correspond, avec un indice de confiance —
+// determinerViaClaude ne fait aucune hypothèse sur le nombre de candidats.
 //
 // Expéditeur connu mais confiance finale < confianceMinimaleCopropriete
 // (identification impossible ou trop incertaine) : un évènement
@@ -67,20 +71,18 @@ func DetermineCopropriete(ctx context.Context, claude coproprieteDecideur, repo 
 	var res ResolutionCopropriete
 	var err error
 
-	switch len(candidats) {
-	case 0:
+	switch {
+	case len(candidats) == 0:
 		res = ResolutionCopropriete{Raison: "aucune copropriété associée à l'expéditeur"}
 
-	case 1:
+	case len(candidats) == 1 && len(candidats[0].Roles) == 1:
 		c := candidats[0]
 		res = ResolutionCopropriete{
 			CoproprieteID:        &c.CoproprieteID,
 			CoproprieteReference: c.CoproprieteReference,
+			Role:                 &c.Roles[0],
 			Confiance:            1,
-			Raison:               "une seule copropriété associée à l'expéditeur",
-		}
-		if len(c.Roles) == 1 {
-			res.Role = &c.Roles[0]
+			Raison:               "une seule copropriété associée à l'expéditeur, un seul rôle possible",
 		}
 
 	default:
