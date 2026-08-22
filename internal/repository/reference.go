@@ -73,10 +73,11 @@ func (c *Client) EmailStatutTraitementID(ctx context.Context, description string
 	return c.lookupReferenceID(ctx, "email_statut_traitement", description)
 }
 
-// IncidentStatutID retrouve l'ID de incident_statut pour la description
-// donnée (voir les constantes domain.IncidentStatut*).
-func (c *Client) IncidentStatutID(ctx context.Context, description string) (int64, error) {
-	return c.lookupReferenceID(ctx, "incident_statut", description)
+// TicketStatutID retrouve l'ID de ticket_statut pour la description donnée
+// (voir les constantes domain.TicketStatut*) — vocabulaire de cycle de vie
+// partagé par tous les types de ticket (incident, sinistre, travaux...).
+func (c *Client) TicketStatutID(ctx context.Context, description string) (int64, error) {
+	return c.lookupReferenceID(ctx, "ticket_statut", description)
 }
 
 // NiveauUrgenceID retrouve l'ID de niveau_urgence pour la description donnée
@@ -85,10 +86,11 @@ func (c *Client) NiveauUrgenceID(ctx context.Context, description string) (int64
 	return c.lookupReferenceID(ctx, "niveau_urgence", description)
 }
 
-// SinistreStatutID retrouve l'ID de sinistre_statut pour la description
-// donnée (voir les constantes domain.SinistreStatut*).
-func (c *Client) SinistreStatutID(ctx context.Context, description string) (int64, error) {
-	return c.lookupReferenceID(ctx, "sinistre_statut", description)
+// SinistreResultatID retrouve l'ID de sinistre_resultat pour la description
+// donnée (voir les constantes domain.SinistreResultat*) — résultat d'un
+// dossier d'assurance, indépendant du statut générique du ticket.
+func (c *Client) SinistreResultatID(ctx context.Context, description string) (int64, error) {
+	return c.lookupReferenceID(ctx, "sinistre_resultat", description)
 }
 
 // LogTypeID retrouve l'ID de log_type pour la description donnée (voir les

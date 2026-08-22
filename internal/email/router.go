@@ -2,6 +2,7 @@ package email
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/projetimmoai/immo/internal/claudeapi"
@@ -21,7 +22,7 @@ type ResolutionAction struct {
 // actionDecideur est la portion de claudeapi.Client utilisée ici — une
 // interface étroite pour pouvoir tester avec un faux (cf. router_test.go).
 type actionDecideur interface {
-	DecideAction(ctx context.Context, actions []domain.Action, ctxRoutage domain.ContexteRoutage, objet, corpsTexte string) (claudeapi.DecisionAction, error)
+	DecideAction(ctx context.Context, actions []domain.Action, ctxRoutage domain.ContexteRoutage, objet, corpsTexte string) ([]claudeapi.DecisionAction, error)
 }
 
 // gestionnaireAction est le type de fonction appelée pour traiter un
@@ -51,36 +52,51 @@ var gestionnairesAction = map[string]gestionnaireAction{
 
 // routerVersActions classifie un e-mail avec Claude parmi actions — un
 // sous-ensemble choisi par l'appelant selon le rôle de l'expéditeur (cf.
-// RouterOccupant, filtrerActions) — puis dispatch vers la fonction de
-// traitement de l'action retenue (cf. gestionnairesAction).
-func routerVersActions(ctx context.Context, claude actionDecideur, actions []domain.Action, ctxRoutage domain.ContexteRoutage, objet, corpsTexte string) (ResolutionAction, error) {
+// RouterOccupant, filtrerActions) — puis dispatch chaque demande identifiée
+// vers la fonction de traitement de son action (cf. gestionnairesAction).
+//
+// Un même e-mail peut contenir plusieurs demandes distinctes (cf.
+// claudeapi.DecideAction) : chacune produit sa propre ResolutionAction,
+// traitée indépendamment des autres — l'échec du traitement d'une demande
+// n'empêche pas les suivantes d'être traitées. Retourne toujours toutes les
+// ResolutionAction produites (même partiellement, en cas d'erreur), pour ne
+// pas perdre le résultat des demandes qui ont réussi ; les erreurs
+// rencontrées sont agrégées (errors.Join) dans l'erreur retournée.
+func routerVersActions(ctx context.Context, claude actionDecideur, actions []domain.Action, ctxRoutage domain.ContexteRoutage, objet, corpsTexte string) ([]ResolutionAction, error) {
 	if len(actions) == 0 {
-		return ResolutionAction{}, fmt.Errorf("email: routage impossible : aucune action disponible pour ce rôle")
+		return nil, fmt.Errorf("email: routage impossible : aucune action disponible pour ce rôle")
 	}
 
-	decision, err := claude.DecideAction(ctx, actions, ctxRoutage, objet, corpsTexte)
+	decisions, err := claude.DecideAction(ctx, actions, ctxRoutage, objet, corpsTexte)
 	if err != nil {
-		return ResolutionAction{}, fmt.Errorf("email: détermination de l'action via Claude: %w", err)
+		return nil, fmt.Errorf("email: détermination de l'action via Claude: %w", err)
 	}
 
-	if !actionConnue(actions, decision.Action) {
-		// Sécurité : Claude n'est censé choisir que parmi les actions
-		// fournies. S'il en invente une, on ne lui fait pas confiance
-		// plutôt que de router vers une action qui n'existe pas.
-		return ResolutionAction{
-			Raison: fmt.Sprintf("réponse Claude incohérente : action %q ne figure pas parmi les %d actions proposées", decision.Action, len(actions)),
-		}, nil
-	}
-	res := ResolutionAction{Action: decision.Action, Confiance: decision.Confiance, Raison: decision.Raison}
+	resultats := make([]ResolutionAction, 0, len(decisions))
+	var erreurs []error
+	for _, decision := range decisions {
+		if !actionConnue(actions, decision.Action) {
+			// Sécurité : Claude n'est censé choisir que parmi les actions
+			// fournies. S'il en invente une, on ne lui fait pas confiance
+			// plutôt que de router vers une action qui n'existe pas.
+			resultats = append(resultats, ResolutionAction{
+				Raison: fmt.Sprintf("réponse Claude incohérente : action %q ne figure pas parmi les %d actions proposées", decision.Action, len(actions)),
+			})
+			continue
+		}
+		res := ResolutionAction{Action: decision.Action, Confiance: decision.Confiance, Raison: decision.Raison}
+		resultats = append(resultats, res)
 
-	gestionnaire, ok := gestionnairesAction[res.Action]
-	if !ok {
-		return res, fmt.Errorf("email: aucune fonction de traitement enregistrée pour l'action %q", res.Action)
+		gestionnaire, ok := gestionnairesAction[res.Action]
+		if !ok {
+			erreurs = append(erreurs, fmt.Errorf("email: aucune fonction de traitement enregistrée pour l'action %q", res.Action))
+			continue
+		}
+		if err := gestionnaire(ctx, ctxRoutage, res, objet, corpsTexte); err != nil {
+			erreurs = append(erreurs, fmt.Errorf("email: traitement de l'action %q: %w", res.Action, err))
+		}
 	}
-	if err := gestionnaire(ctx, ctxRoutage, res, objet, corpsTexte); err != nil {
-		return res, fmt.Errorf("email: traitement de l'action %q: %w", res.Action, err)
-	}
-	return res, nil
+	return resultats, errors.Join(erreurs...)
 }
 
 func actionConnue(actions []domain.Action, description string) bool {

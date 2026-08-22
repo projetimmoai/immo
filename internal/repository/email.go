@@ -20,8 +20,6 @@ type emailRow struct {
 	Objet                *string    `json:"objet"`
 	CorpsTexte           *string    `json:"corps_texte"`
 	CorpsHTML            *string    `json:"corps_html"`
-	ActionID             *int64     `json:"action_id"`
-	SousActionID         *int64     `json:"sous_action_id"`
 	CoproprieteID        *int64     `json:"copropriete_id"`
 	LotID                *int64     `json:"lot_id"`
 	StatutTraitementID   int64      `json:"statut_traitement_id"`
@@ -41,8 +39,6 @@ func (r emailRow) toDomain() *domain.Email {
 		Objet:                r.Objet,
 		CorpsTexte:           r.CorpsTexte,
 		CorpsHTML:            r.CorpsHTML,
-		ActionID:             r.ActionID,
-		SousActionID:         r.SousActionID,
 		CoproprieteID:        r.CoproprieteID,
 		LotID:                r.LotID,
 		StatutTraitementID:   r.StatutTraitementID,
@@ -62,8 +58,6 @@ type emailInsert struct {
 	Objet                *string   `json:"objet,omitempty"`
 	CorpsTexte           *string   `json:"corps_texte,omitempty"`
 	CorpsHTML            *string   `json:"corps_html,omitempty"`
-	ActionID             *int64    `json:"action_id,omitempty"`
-	SousActionID         *int64    `json:"sous_action_id,omitempty"`
 	CoproprieteID        *int64    `json:"copropriete_id,omitempty"`
 	LotID                *int64    `json:"lot_id,omitempty"`
 	StatutTraitementID   int64     `json:"statut_traitement_id"`
@@ -81,8 +75,6 @@ func (c *Client) InsertEmail(ctx context.Context, e *domain.Email) (*domain.Emai
 		Objet:                e.Objet,
 		CorpsTexte:           e.CorpsTexte,
 		CorpsHTML:            e.CorpsHTML,
-		ActionID:             e.ActionID,
-		SousActionID:         e.SousActionID,
 		CoproprieteID:        e.CoproprieteID,
 		LotID:                e.LotID,
 		StatutTraitementID:   e.StatutTraitementID,

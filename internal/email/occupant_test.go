@@ -27,15 +27,20 @@ func actionsTableTest() []*domain.Action {
 }
 
 func TestRouterOccupantNePropseQueLesActionsOccupant(t *testing.T) {
-	decideur := &fakeActionDecideur{decision: claudeapi.DecisionAction{Action: domain.ActionIncident, Confiance: 0.9, Raison: "ascenseur en panne"}}
+	decideur := &fakeActionDecideur{decisions: []claudeapi.DecisionAction{
+		{Action: domain.ActionIncident, Confiance: 0.9, Raison: "ascenseur en panne"},
+	}}
 	ctxRoutage := domain.ContexteRoutage{CoproprieteReference: "COP1"}
 
-	res, err := RouterOccupant(context.Background(), decideur, actionsTableTest(), ctxRoutage, "Ascenseur en panne", "Bonjour, l'ascenseur ne fonctionne plus.")
+	resultats, err := RouterOccupant(context.Background(), decideur, actionsTableTest(), ctxRoutage, "Ascenseur en panne", "Bonjour, l'ascenseur ne fonctionne plus.")
 	if err != nil {
 		t.Fatalf("RouterOccupant: %v", err)
 	}
-	if res.Action != domain.ActionIncident {
-		t.Errorf("Action = %q, attendu %q", res.Action, domain.ActionIncident)
+	if len(resultats) != 1 {
+		t.Fatalf("resultats = %+v, attendu 1", resultats)
+	}
+	if resultats[0].Action != domain.ActionIncident {
+		t.Errorf("Action = %q, attendu %q", resultats[0].Action, domain.ActionIncident)
 	}
 	if len(decideur.actionsRecues) != len(actionsOccupant) {
 		t.Fatalf("actions reçues par Claude = %+v, attendu %d (actionsOccupant, pas la table entière)", decideur.actionsRecues, len(actionsOccupant))

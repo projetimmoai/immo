@@ -10,14 +10,14 @@ import (
 )
 
 type fakeActionDecideur struct {
-	decision      claudeapi.DecisionAction
+	decisions     []claudeapi.DecisionAction
 	err           error
 	actionsRecues []domain.Action
 }
 
-func (f *fakeActionDecideur) DecideAction(_ context.Context, actions []domain.Action, _ domain.ContexteRoutage, _, _ string) (claudeapi.DecisionAction, error) {
+func (f *fakeActionDecideur) DecideAction(_ context.Context, actions []domain.Action, _ domain.ContexteRoutage, _, _ string) ([]claudeapi.DecisionAction, error) {
 	f.actionsRecues = actions
-	return f.decision, f.err
+	return f.decisions, f.err
 }
 
 func actionsOccupantTest() []domain.Action {
@@ -31,18 +31,23 @@ func actionsOccupantTest() []domain.Action {
 }
 
 func TestRouterVersActionsActionConnueAppelleLeBonGestionnaire(t *testing.T) {
-	decideur := &fakeActionDecideur{decision: claudeapi.DecisionAction{Action: domain.ActionIncident, Confiance: 0.9, Raison: "fuite d'eau mentionnée"}}
+	decideur := &fakeActionDecideur{decisions: []claudeapi.DecisionAction{
+		{Action: domain.ActionIncident, Confiance: 0.9, Raison: "fuite d'eau mentionnée"},
+	}}
 	ctxRoutage := domain.ContexteRoutage{CoproprieteReference: "COP1"}
 
-	res, err := routerVersActions(context.Background(), decideur, actionsOccupantTest(), ctxRoutage, "Fuite d'eau", "Il y a une fuite dans le lot")
+	resultats, err := routerVersActions(context.Background(), decideur, actionsOccupantTest(), ctxRoutage, "Fuite d'eau", "Il y a une fuite dans le lot")
 	if err != nil {
 		t.Fatalf("routerVersActions: %v", err)
 	}
-	if res.Action != domain.ActionIncident {
-		t.Errorf("Action = %q, attendu %q", res.Action, domain.ActionIncident)
+	if len(resultats) != 1 {
+		t.Fatalf("resultats = %+v, attendu 1", resultats)
 	}
-	if res.Confiance != 0.9 {
-		t.Errorf("Confiance = %v, attendu 0.9", res.Confiance)
+	if resultats[0].Action != domain.ActionIncident {
+		t.Errorf("Action = %q, attendu %q", resultats[0].Action, domain.ActionIncident)
+	}
+	if resultats[0].Confiance != 0.9 {
+		t.Errorf("Confiance = %v, attendu 0.9", resultats[0].Confiance)
 	}
 	if len(decideur.actionsRecues) != 5 {
 		t.Errorf("actions reçues par Claude = %+v, attendu 5", decideur.actionsRecues)
@@ -50,15 +55,40 @@ func TestRouterVersActionsActionConnueAppelleLeBonGestionnaire(t *testing.T) {
 }
 
 func TestRouterVersActionsActionInconnueRejetee(t *testing.T) {
-	decideur := &fakeActionDecideur{decision: claudeapi.DecisionAction{Action: "action-inventee", Confiance: 0.9, Raison: "hallucination"}}
+	decideur := &fakeActionDecideur{decisions: []claudeapi.DecisionAction{
+		{Action: "action-inventee", Confiance: 0.9, Raison: "hallucination"},
+	}}
 	ctxRoutage := domain.ContexteRoutage{CoproprieteReference: "COP1"}
 
-	res, err := routerVersActions(context.Background(), decideur, actionsOccupantTest(), ctxRoutage, "Objet", "Corps")
+	resultats, err := routerVersActions(context.Background(), decideur, actionsOccupantTest(), ctxRoutage, "Objet", "Corps")
 	if err != nil {
 		t.Fatalf("routerVersActions: %v", err)
 	}
-	if res.Action != "" {
-		t.Errorf("Action = %q, attendu vide (réponse rejetée)", res.Action)
+	if len(resultats) != 1 || resultats[0].Action != "" {
+		t.Errorf("resultats = %+v, attendu 1 résultat avec Action vide (réponse rejetée)", resultats)
+	}
+}
+
+// TestRouterVersActionsPlusieursDemandesDispatchentChacune vérifie qu'un
+// e-mail dont Claude identifie 2 demandes distinctes produit bien 2
+// ResolutionAction, chacune dispatchée vers sa propre fonction de
+// traitement — pas une seule action retenue arbitrairement.
+func TestRouterVersActionsPlusieursDemandesDispatchentChacune(t *testing.T) {
+	decideur := &fakeActionDecideur{decisions: []claudeapi.DecisionAction{
+		{Action: domain.ActionIncident, Confiance: 0.9, Raison: "digicode en panne"},
+		{Action: domain.ActionDemandeAdministrative, Confiance: 0.85, Raison: "demande de règlement de copropriété"},
+	}}
+	ctxRoutage := domain.ContexteRoutage{CoproprieteReference: "COP1"}
+
+	resultats, err := routerVersActions(context.Background(), decideur, actionsOccupantTest(), ctxRoutage, "Objet", "Corps")
+	if err != nil {
+		t.Fatalf("routerVersActions: %v", err)
+	}
+	if len(resultats) != 2 {
+		t.Fatalf("resultats = %+v, attendu 2", resultats)
+	}
+	if resultats[0].Action != domain.ActionIncident || resultats[1].Action != domain.ActionDemandeAdministrative {
+		t.Errorf("resultats = %+v, attendu [incident, demande_administrative] dans cet ordre", resultats)
 	}
 }
 

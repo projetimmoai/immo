@@ -98,11 +98,21 @@ func run(from, subject, body string) error {
 		fmt.Printf("--- résultat ---\nRôle retenu %v : aucun routeur d'actions pour ce rôle pour l'instant (seul occupant en a un).\n", ctxRoutage.Role)
 		return nil
 	}
-	resAction, err := email.RouterOccupant(ctx, claude, actions, *ctxRoutage, subject, body)
+	resActions, err := email.RouterOccupant(ctx, claude, actions, *ctxRoutage, subject, body)
 	if err != nil {
 		return fmt.Errorf("routage de l'action: %w", err)
 	}
-	fmt.Printf("--- action ---\n%+v\n", resAction)
-	fmt.Println("\n(la fonction de traitement correspondante a été appelée, mais elle ne fait encore rien : cf. internal/email/incident.go et consorts)")
+	fmt.Printf("--- action%s ---\n", pluriel(len(resActions)))
+	for _, res := range resActions {
+		fmt.Printf("%+v\n", res)
+	}
+	fmt.Println("\n(la ou les fonctions de traitement correspondantes ont été appelées, mais elles ne font encore rien : cf. internal/email/incident.go et consorts)")
 	return nil
+}
+
+func pluriel(n int) string {
+	if n > 1 {
+		return "s"
+	}
+	return ""
 }

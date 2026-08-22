@@ -61,6 +61,12 @@ type EmailStatutTraitement struct {
 }
 
 // Email est le journal de tout e-mail reçu par le worker, traité ou non.
+//
+// Pas d'ActionID/SousActionID ici : un même e-mail peut donner lieu à
+// plusieurs demandes distinctes (cf. email.routerVersActions), donc à
+// plusieurs Ticket — chacun porte sa propre action (cf. domain.Ticket).
+// CoproprieteID/LotID restent ici : déterminés une seule fois par e-mail
+// (cf. email.DetermineCopropriete), même si aucun ticket n'est encore créé.
 type Email struct {
 	ID                   int64
 	CreatedAt            time.Time
@@ -71,8 +77,6 @@ type Email struct {
 	Objet                *string
 	CorpsTexte           *string
 	CorpsHTML            *string
-	ActionID             *int64 // FK -> action.id, nul tant que non classifié
-	SousActionID         *int64 // FK -> sous_action.id, nul tant que non classifié (ou si l'action n'a pas de sous-action)
 	CoproprieteID        *int64 // FK -> copropriete.id, résolu si identifiable
 	LotID                *int64 // FK -> lot.id, résolu si identifiable
 	StatutTraitementID   int64  // FK -> email_statut_traitement.id, NOT NULL : à fixer explicitement à l'insertion (pas de DEFAULT en base)

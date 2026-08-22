@@ -22,12 +22,13 @@ var actionsOccupant = []string{
 
 // RouterOccupant classifie, parmi actionsOccupant, un e-mail dont
 // l'expéditeur a été identifié comme occupant (cf. NouveauContexteRoutage),
-// puis dispatch vers la fonction de traitement de l'action retenue.
+// puis dispatch chaque demande identifiée vers la fonction de traitement de
+// son action — un e-mail peut en contenir plusieurs (cf. routerVersActions).
 //
 // actions est la liste complète des actions possibles (table action), à
 // charger une fois par l'appelant (cf. repository.Client.ListActions)
 // plutôt qu'à chaque appel — seul le sous-ensemble pertinent pour un
 // occupant (actionsOccupant) est effectivement proposé à Claude.
-func RouterOccupant(ctx context.Context, claude actionDecideur, actions []*domain.Action, ctxRoutage domain.ContexteRoutage, objet, corpsTexte string) (ResolutionAction, error) {
+func RouterOccupant(ctx context.Context, claude actionDecideur, actions []*domain.Action, ctxRoutage domain.ContexteRoutage, objet, corpsTexte string) ([]ResolutionAction, error) {
 	return routerVersActions(ctx, claude, filtrerActions(actions, actionsOccupant), ctxRoutage, objet, corpsTexte)
 }
