@@ -28,6 +28,7 @@ const (
 	idUrgenceMoyen                     = 31
 	idModeConfirmationOccupant         = 40
 	idModeJugeeInutile                 = 41
+	idModeVerificationGH               = 42
 	idResultatPositive                 = 50
 	idResultatNegative                 = 51
 	idFactureRecue                     = 60
@@ -189,6 +190,8 @@ func (f *fakeIncidentRepo) ModeVerificationID(_ context.Context, description str
 		return idModeConfirmationOccupant, nil
 	case domain.ModeVerificationJugeeInutile:
 		return idModeJugeeInutile, nil
+	case domain.ModeVerificationGH:
+		return idModeVerificationGH, nil
 	}
 	return 0, errIntrouvable(description)
 }
@@ -650,6 +653,57 @@ func TestEnregistrerReponseReclamationRefuseeLitige(t *testing.T) {
 	}
 	if repo.statutsAppliques[1] != idStatutLitige {
 		t.Errorf("statut = %d, attendu litige (%d)", repo.statutsAppliques[1], idStatutLitige)
+	}
+}
+
+func TestEnregistrerConstatGHResoluRendPaiementPossible(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	repo.tickets[1] = &domain.Ticket{ID: 1}
+	repo.incidents[1] = &domain.Incident{TicketID: 1, PrestataireID: int64Ptr(42)}
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerConstatGH(context.Background(), 1, true); err != nil {
+		t.Fatalf("EnregistrerConstatGH: %v", err)
+	}
+	inc := repo.incidents[1]
+	if inc.ModeVerificationID == nil || *inc.ModeVerificationID != idModeVerificationGH {
+		t.Errorf("ModeVerificationID = %v, attendu verification_gh (%d)", inc.ModeVerificationID, idModeVerificationGH)
+	}
+	if inc.VerificationResultatID == nil || *inc.VerificationResultatID != idResultatPositive {
+		t.Errorf("VerificationResultatID = %v, attendu positive (%d)", inc.VerificationResultatID, idResultatPositive)
+	}
+	if inc.DateResolution == nil {
+		t.Error("DateResolution non renseignée alors que le constat GH est positif")
+	}
+	if _, applique := repo.statutsAppliques[1]; applique {
+		t.Errorf("statut appliqué = %d, aucun changement de statut attendu (constat positif)", repo.statutsAppliques[1])
+	}
+}
+
+func TestEnregistrerConstatGHNonResoluDemarreReclamation(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	repo.tickets[1] = &domain.Ticket{ID: 1}
+	repo.incidents[1] = &domain.Incident{TicketID: 1, PrestataireID: int64Ptr(42)}
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerConstatGH(context.Background(), 1, false); err != nil {
+		t.Fatalf("EnregistrerConstatGH: %v", err)
+	}
+	inc := repo.incidents[1]
+	if inc.VerificationResultatID == nil || *inc.VerificationResultatID != idResultatNegative {
+		t.Errorf("VerificationResultatID = %v, attendu negative (%d)", inc.VerificationResultatID, idResultatNegative)
+	}
+	if repo.statutsAppliques[1] != idStatutEnAttenteTiers {
+		t.Errorf("statut = %d, attendu en_attente_tiers (%d) : réclamation envoyée", repo.statutsAppliques[1], idStatutEnAttenteTiers)
+	}
+	var trouvee *domain.Reclamation
+	for _, r := range repo.reclamations {
+		if r.TicketID == 1 {
+			trouvee = r
+		}
+	}
+	if trouvee == nil {
+		t.Fatal("aucune réclamation créée")
 	}
 }
 

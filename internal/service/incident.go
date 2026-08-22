@@ -82,10 +82,8 @@ type incidentQualifieur interface {
 // prestataire.
 //
 // Volontairement hors de cette tranche (laissés pour un prochain jalon) :
-// vérification par un gestionnaire humain sur place (phase 5.2, qui peut
-// aussi déclencher une réclamation — seule la voie occupant y mène pour
-// l'instant), résolution effective d'un litige (phase 5.3.5 s'arrête à
-// l'état "litige", traité par un futur graphe dédié), sélection d'un
+// résolution effective d'un litige (phase 5.3.5 s'arrête à l'état
+// "litige", traité par un futur graphe dédié), sélection d'un
 // prestataire dans un répertoire par zone d'intervention (pas encore
 // modélisé), rédaction réelle des communications (demande de devis,
 // d'avis, résolution AG, réclamation — de simples enregistrements pour
@@ -610,12 +608,58 @@ func (s *IncidentService) EnregistrerConfirmationOccupant(ctx context.Context, t
 	return nil
 }
 
+// EnregistrerConstatGH couvre la phase 5.2.1-5.2.3 : voie vérification par
+// un gestionnaire humain sur place — déplacement et constat physique, non
+// délégable (à la différence de la voie occupant, ce n'est jamais une
+// simple confirmation demandée en amont : le mode de vérification est
+// enregistré ici, au moment du constat lui-même). resolu=false déclenche la
+// réclamation (phase 5.3), comme pour la voie occupant (cf.
+// EnregistrerConfirmationOccupant) ; resolu=true rend la mise en paiement
+// possible (cf. MettreEnPaiement), sans rien changer au statut ici — la
+// facture suit son propre circuit.
+func (s *IncidentService) EnregistrerConstatGH(ctx context.Context, ticketID int64, resolu bool) error {
+	modeID, err := s.Repo.ModeVerificationID(ctx, domain.ModeVerificationGH)
+	if err != nil {
+		return fmt.Errorf("service: constat GH ticket_id=%d: résolution du mode: %w", ticketID, err)
+	}
+	resultatDescription := domain.VerificationResultatNegative
+	if resolu {
+		resultatDescription = domain.VerificationResultatPositive
+	}
+	resultatID, err := s.Repo.VerificationResultatID(ctx, resultatDescription)
+	if err != nil {
+		return fmt.Errorf("service: constat GH ticket_id=%d: résolution du résultat: %w", ticketID, err)
+	}
+	if err := s.Repo.SetIncidentModeVerification(ctx, ticketID, modeID, &resultatID); err != nil {
+		return fmt.Errorf("service: constat GH ticket_id=%d: enregistrement du mode/résultat: %w", ticketID, err)
+	}
+
+	if resolu {
+		maintenant := time.Now().UTC()
+		if err := s.Repo.SetIncidentVerificationResultat(ctx, ticketID, resultatID, &maintenant); err != nil {
+			return fmt.Errorf("service: constat GH ticket_id=%d: enregistrement de la date de résolution: %w", ticketID, err)
+		}
+		// Vérification positive : la mise en paiement de la facture devient
+		// possible (cf. MettreEnPaiement), mais rien à faire ici sur le
+		// statut — la facture suit son propre circuit (cf. EnregistrerFacture).
+		return nil
+	}
+
+	// Non-résolution (phase 5.2.3) : réclamation auprès du prestataire
+	// (phase 5.3), comme pour la voie occupant.
+	if err := s.demarrerReclamation(ctx, ticketID); err != nil {
+		return fmt.Errorf("service: constat GH ticket_id=%d: %w", ticketID, err)
+	}
+	return nil
+}
+
 // demarrerReclamation couvre la phase 5.3.1 : réclamation rédigée et
 // adressée au prestataire, qu'elle vienne d'une non-résolution signalée par
-// l'occupant (phase 5.1.5) ou, plus tard, d'un constat du gestionnaire
-// humain sur place (phase 5.2.3, pas encore implémenté). Sans prestataire
-// connu sur l'incident (ne devrait pas arriver à ce stade du graphe), le
-// ticket reste en attente d'un gestionnaire humain plutôt que d'échouer.
+// l'occupant (phase 5.1.5, cf. EnregistrerConfirmationOccupant) ou d'un
+// constat du gestionnaire humain sur place (phase 5.2.3, cf.
+// EnregistrerConstatGH). Sans prestataire connu sur l'incident (ne devrait
+// pas arriver à ce stade du graphe), le ticket reste en attente d'un
+// gestionnaire humain plutôt que d'échouer.
 func (s *IncidentService) demarrerReclamation(ctx context.Context, ticketID int64) error {
 	incident, err := s.Repo.FindIncidentByTicketID(ctx, ticketID)
 	if err != nil {
