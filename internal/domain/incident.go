@@ -71,9 +71,19 @@ type VerificationResultat struct {
 // PrestataireID/MontantEstimeCentimes/RapportIntervention/ModeVerification*/
 // VerificationResultat* couvrent la tranche verticale "cas simple, montant
 // sous le plafond D" du graphe de cycle de vie (cf. docs/cycle-vie-incident.
-// md) : sélection du prestataire, suivi de l'intervention, puis
-// vérification — sans devis, décision du conseil syndical déléguée ou avis,
-// ni vote en assemblée générale, laissés pour un prochain jalon.
+// md). DevisRetenuID/AvisCS*/DecisionCS*/AG* couvrent le jalon suivant :
+// au-delà du plafond D, la chaîne des seuils légaux A/B et de l'enveloppe C
+// (cf. domain.ConseilSyndicalDelegation), jusqu'au vote en assemblée
+// générale si le montant dépasse même le pouvoir ordinaire du syndic — au
+// plus une seule de ces trois voies de décision est empruntée par ticket
+// (d'où des colonnes directement sur Incident plutôt qu'une table à part :
+// à la différence de Devis, il n'y en a jamais plusieurs par ticket).
+//
+// La sélection du prestataire (contrat actif uniquement, pas de répertoire
+// par zone d'intervention) et la mise en concurrence réelle (seuil B, qui
+// suppose plusieurs prestataires candidats) restent hors de ce qui est
+// automatisé : au-delà d'un seul devis, ou sans contrat actif, le ticket
+// reste en attente d'un gestionnaire humain (cf. service.IncidentService).
 type Incident struct {
 	TicketID               int64  // PK -> ticket.id (1-1, pas d'id propre)
 	CategorieTechniqueID   *int64 // FK -> categorie_technique.id
@@ -84,4 +94,15 @@ type Incident struct {
 	RapportIntervention    *string
 	ModeVerificationID     *int64 // FK -> mode_verification.id
 	VerificationResultatID *int64 // FK -> verification_resultat.id
+
+	DevisRetenuID       *int64 // FK -> devis.id, une fois la décision prise (quelle que soit l'instance qui a tranché)
+	AvisCSDemandeLe     *time.Time
+	AvisCSRecuLe        *time.Time
+	AvisCSTexte         *string // avis écrit du CS, consultatif (seuil A) — le syndic/IA reste décisionnaire
+	DecisionCSDemandeLe *time.Time
+	DecisionCSRecueLe   *time.Time // le CS a voté et choisi l'artisan (enveloppe C) — syndic exécutant/payeur
+	AGResolutionTexte   *string
+	AGInscriteLe        *time.Time
+	AGVoteeLe           *time.Time
+	AGResultatID        *int64 // FK -> ag_resultat.id
 }

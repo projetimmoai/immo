@@ -7,13 +7,15 @@ import "time"
 // "en_attente_*" indique qui doit agir ensuite : l'émetteur (client), le
 // cabinet, ou un tiers (prestataire...).
 const (
-	TicketStatutNouveau               = "nouveau"
-	TicketStatutEnCours               = "en_cours"
-	TicketStatutEnAttenteEmetteur     = "en_attente_emetteur"
-	TicketStatutEnAttenteGestionnaire = "en_attente_gestionnaire"
-	TicketStatutEnAttenteTiers        = "en_attente_tiers"
-	TicketStatutResolu                = "resolu"
-	TicketStatutFerme                 = "ferme"
+	TicketStatutNouveau                    = "nouveau"
+	TicketStatutEnCours                    = "en_cours"
+	TicketStatutEnAttenteEmetteur          = "en_attente_emetteur"
+	TicketStatutEnAttenteGestionnaire      = "en_attente_gestionnaire"
+	TicketStatutEnAttenteTiers             = "en_attente_tiers"
+	TicketStatutEnAttenteConseilSyndical   = "en_attente_conseil_syndical"
+	TicketStatutEnAttenteAssembleeGenerale = "en_attente_assemblee_generale"
+	TicketStatutResolu                     = "resolu"
+	TicketStatutFerme                      = "ferme"
 )
 
 // TicketStatut est la table de référence du statut d'un Ticket — partagée

@@ -20,6 +20,16 @@ type incidentRow struct {
 	RapportIntervention    *string    `json:"rapport_intervention"`
 	ModeVerificationID     *int64     `json:"mode_verification_id"`
 	VerificationResultatID *int64     `json:"verification_resultat_id"`
+	DevisRetenuID          *int64     `json:"devis_retenu_id"`
+	AvisCSDemandeLe        *time.Time `json:"avis_cs_demande_le"`
+	AvisCSRecuLe           *time.Time `json:"avis_cs_recu_le"`
+	AvisCSTexte            *string    `json:"avis_cs_texte"`
+	DecisionCSDemandeLe    *time.Time `json:"decision_cs_demande_le"`
+	DecisionCSRecueLe      *time.Time `json:"decision_cs_recue_le"`
+	AGResolutionTexte      *string    `json:"ag_resolution_texte"`
+	AGInscriteLe           *time.Time `json:"ag_inscrite_le"`
+	AGVoteeLe              *time.Time `json:"ag_votee_le"`
+	AGResultatID           *int64     `json:"ag_resultat_id"`
 }
 
 func (r incidentRow) toDomain() *domain.Incident {
@@ -33,6 +43,16 @@ func (r incidentRow) toDomain() *domain.Incident {
 		RapportIntervention:    r.RapportIntervention,
 		ModeVerificationID:     r.ModeVerificationID,
 		VerificationResultatID: r.VerificationResultatID,
+		DevisRetenuID:          r.DevisRetenuID,
+		AvisCSDemandeLe:        r.AvisCSDemandeLe,
+		AvisCSRecuLe:           r.AvisCSRecuLe,
+		AvisCSTexte:            r.AvisCSTexte,
+		DecisionCSDemandeLe:    r.DecisionCSDemandeLe,
+		DecisionCSRecueLe:      r.DecisionCSRecueLe,
+		AGResolutionTexte:      r.AGResolutionTexte,
+		AGInscriteLe:           r.AGInscriteLe,
+		AGVoteeLe:              r.AGVoteeLe,
+		AGResultatID:           r.AGResultatID,
 	}
 }
 
@@ -113,6 +133,16 @@ type incidentPatch struct {
 	ModeVerificationID     *int64     `json:"mode_verification_id,omitempty"`
 	VerificationResultatID *int64     `json:"verification_resultat_id,omitempty"`
 	DateResolution         *time.Time `json:"date_resolution,omitempty"`
+	DevisRetenuID          *int64     `json:"devis_retenu_id,omitempty"`
+	AvisCSDemandeLe        *time.Time `json:"avis_cs_demande_le,omitempty"`
+	AvisCSRecuLe           *time.Time `json:"avis_cs_recu_le,omitempty"`
+	AvisCSTexte            *string    `json:"avis_cs_texte,omitempty"`
+	DecisionCSDemandeLe    *time.Time `json:"decision_cs_demande_le,omitempty"`
+	DecisionCSRecueLe      *time.Time `json:"decision_cs_recue_le,omitempty"`
+	AGResolutionTexte      *string    `json:"ag_resolution_texte,omitempty"`
+	AGInscriteLe           *time.Time `json:"ag_inscrite_le,omitempty"`
+	AGVoteeLe              *time.Time `json:"ag_votee_le,omitempty"`
+	AGResultatID           *int64     `json:"ag_resultat_id,omitempty"`
 }
 
 // updateIncident met à jour partiellement l'Incident identifié par
@@ -151,6 +181,52 @@ func (c *Client) SetIncidentModeVerification(ctx context.Context, ticketID, mode
 // (phase 5.1/5.2), et la date de résolution si le résultat est positif.
 func (c *Client) SetIncidentVerificationResultat(ctx context.Context, ticketID, resultatID int64, dateResolution *time.Time) error {
 	return c.updateIncident(ctx, ticketID, incidentPatch{VerificationResultatID: &resultatID, DateResolution: dateResolution})
+}
+
+// SetIncidentDevisRetenu enregistre le devis retenu pour un Incident, une
+// fois la décision prise — quelle que soit l'instance qui a tranché (CS par
+// délégation, syndic/IA seul, ou AG ; cf. phase 3.4.23).
+func (c *Client) SetIncidentDevisRetenu(ctx context.Context, ticketID, devisID int64) error {
+	return c.updateIncident(ctx, ticketID, incidentPatch{DevisRetenuID: &devisID})
+}
+
+// SetIncidentAvisCSDemande enregistre la demande d'avis envoyée au conseil
+// syndical (phase 3.4.13, seuil A).
+func (c *Client) SetIncidentAvisCSDemande(ctx context.Context, ticketID int64, demandeLe time.Time) error {
+	return c.updateIncident(ctx, ticketID, incidentPatch{AvisCSDemandeLe: &demandeLe})
+}
+
+// SetIncidentAvisCSRecu enregistre l'avis écrit du conseil syndical reçu
+// (phase 3.4.16) — consultatif : le syndic/IA reste décisionnaire.
+func (c *Client) SetIncidentAvisCSRecu(ctx context.Context, ticketID int64, recuLe time.Time, texte string) error {
+	return c.updateIncident(ctx, ticketID, incidentPatch{AvisCSRecuLe: &recuLe, AvisCSTexte: &texte})
+}
+
+// SetIncidentDecisionCSDemande enregistre la transmission du dossier au
+// conseil syndical pour décision, dans le cadre de sa délégation (phase
+// 3.4.8, enveloppe C).
+func (c *Client) SetIncidentDecisionCSDemande(ctx context.Context, ticketID int64, demandeLe time.Time) error {
+	return c.updateIncident(ctx, ticketID, incidentPatch{DecisionCSDemandeLe: &demandeLe})
+}
+
+// SetIncidentDecisionCSRecue enregistre que le conseil syndical a voté et
+// choisi l'artisan (phase 3.4.11) — le syndic/IA n'est plus qu'exécutant et
+// payeur de cette décision.
+func (c *Client) SetIncidentDecisionCSRecue(ctx context.Context, ticketID int64, recueLe time.Time) error {
+	return c.updateIncident(ctx, ticketID, incidentPatch{DecisionCSRecueLe: &recueLe})
+}
+
+// SetIncidentAGResolution enregistre la résolution rédigée et inscrite à
+// l'ordre du jour de l'assemblée générale (phase 3.4.18-3.4.19) — le
+// montant dépasse même le pouvoir ordinaire du syndic.
+func (c *Client) SetIncidentAGResolution(ctx context.Context, ticketID int64, texte string, inscriteLe time.Time) error {
+	return c.updateIncident(ctx, ticketID, incidentPatch{AGResolutionTexte: &texte, AGInscriteLe: &inscriteLe})
+}
+
+// SetIncidentAGResultat enregistre le résultat du vote de l'assemblée
+// générale (phase 3.4.21-3.4.22).
+func (c *Client) SetIncidentAGResultat(ctx context.Context, ticketID, resultatID int64, voteeLe time.Time) error {
+	return c.updateIncident(ctx, ticketID, incidentPatch{AGVoteeLe: &voteeLe, AGResultatID: &resultatID})
 }
 
 // FindIncidentByTicketID retrouve un Incident par son TicketID. Retourne

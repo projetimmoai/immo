@@ -39,9 +39,29 @@ type Copropriete struct {
 	// d'un incident (cf. docs/cycle-vie-incident.md, phase 0.D) : en-dessous,
 	// le prestataire retenu intervient directement, sans devis préalable.
 	// Fixé par le gestionnaire ou la convention de gestion — pas d'origine
-	// légale, par opposition aux seuils A/B (consultation CS, mise en
-	// concurrence) et à l'enveloppe C (délégation CS), pas encore modélisés.
+	// légale, par opposition aux seuils A/B et au pouvoir ordinaire du
+	// syndic ci-dessous (origine légale ou votée en AG), et à l'enveloppe C
+	// (délégation CS, cf. domain.ConseilSyndicalDelegation).
 	PlafondOrdreServiceCentimes *int64
+
+	// SeuilAConsultationCSCentimes est le seuil A (phase 0.A, art. 21 al. 2
+	// de la loi du 10 juillet 1965) : au-delà, le syndic doit recueillir
+	// l'avis écrit du conseil syndical avant d'engager la dépense — avis
+	// consultatif, le syndic reste décisionnaire.
+	SeuilAConsultationCSCentimes *int64
+
+	// SeuilBMiseEnConcurrenceCentimes est le seuil B (phase 0.B, art. 21
+	// al. 3) : au-delà, le syndic doit présenter au moins deux devis
+	// d'entreprises distinctes plutôt qu'un seul.
+	SeuilBMiseEnConcurrenceCentimes *int64
+
+	// SeuilPouvoirSyndicCentimes est le seuil au-delà duquel même l'avis du
+	// conseil syndical ne suffit plus : la dépense excède le pouvoir
+	// ordinaire du syndic et doit être votée en assemblée générale (phase
+	// 3.4.17-3.4.22 du graphe) — distinct de l'enveloppe C (délégation
+	// explicite au CS, cf. domain.ConseilSyndicalDelegation), qui court-
+	// circuite ce seuil tant qu'elle est active et couvre le montant.
+	SeuilPouvoirSyndicCentimes *int64
 }
 
 // Banque contient des informations bancaires (IBAN, BIC...) — dans une

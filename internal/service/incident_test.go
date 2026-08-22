@@ -14,23 +14,31 @@ import (
 // connue, pour que les fonctions de résolution (cf. TicketStatutID...)
 // soient déterministes dans les tests.
 const (
-	idActionIncident              = 1
-	idStatutNouveau               = 10
-	idStatutEnAttenteEmetteur     = 11
-	idStatutEnAttenteGestionnaire = 12
-	idStatutEnAttenteTiers        = 13
-	idStatutResolu                = 14
-	idCategorieFuiteEau           = 20
-	idUrgenceFaible               = 30
-	idUrgenceMoyen                = 31
-	idModeConfirmationOccupant    = 40
-	idModeJugeeInutile            = 41
-	idResultatPositive            = 50
-	idResultatNegative            = 51
-	idFactureRecue                = 60
-	idFactureValidee              = 61
-	idFacturePayee                = 62
-	idFactureRapprochee           = 63
+	idActionIncident                   = 1
+	idStatutNouveau                    = 10
+	idStatutEnAttenteEmetteur          = 11
+	idStatutEnAttenteGestionnaire      = 12
+	idStatutEnAttenteTiers             = 13
+	idStatutResolu                     = 14
+	idStatutEnAttenteConseilSyndical   = 15
+	idStatutEnAttenteAssembleeGenerale = 16
+	idCategorieFuiteEau                = 20
+	idUrgenceFaible                    = 30
+	idUrgenceMoyen                     = 31
+	idModeConfirmationOccupant         = 40
+	idModeJugeeInutile                 = 41
+	idResultatPositive                 = 50
+	idResultatNegative                 = 51
+	idFactureRecue                     = 60
+	idFactureValidee                   = 61
+	idFacturePayee                     = 62
+	idFactureRapprochee                = 63
+	idDevisEnAttente                   = 70
+	idDevisRecu                        = 71
+	idDevisRetenu                      = 72
+	idDevisRejete                      = 73
+	idAGApprouve                       = 80
+	idAGRejete                         = 81
 )
 
 // fakeIncidentRepo simule incidentRepo — un registre en mémoire plutôt qu'un
@@ -42,12 +50,15 @@ type fakeIncidentRepo struct {
 	urgences     []domain.NiveauUrgence
 	copropriete  *domain.Copropriete
 	contratActif *repository.ContratActif
+	delegation   *domain.ConseilSyndicalDelegation // simplifié : actif dès qu'il couvre le montant, pas de vraies dates
 
 	prochainTicketID   int64
 	tickets            map[int64]*domain.Ticket
 	incidents          map[int64]*domain.Incident
 	factures           map[int64]*domain.Facture
 	prochaineFactureID int64
+	devis              map[int64]*domain.Devis
+	prochainDevisID    int64
 
 	// Enregistrements des appels, pour les assertions des tests.
 	statutsAppliques    map[int64]int64 // ticket_id -> dernier statut_id appliqué
@@ -58,9 +69,11 @@ func newFakeIncidentRepo() *fakeIncidentRepo {
 	return &fakeIncidentRepo{
 		prochainTicketID:    1,
 		prochaineFactureID:  1,
+		prochainDevisID:     1,
 		tickets:             map[int64]*domain.Ticket{},
 		incidents:           map[int64]*domain.Incident{},
 		factures:            map[int64]*domain.Facture{},
+		devis:               map[int64]*domain.Devis{},
 		statutsAppliques:    map[int64]int64{},
 		prestatairesDefinis: map[int64]int64{},
 	}
@@ -85,6 +98,10 @@ func (f *fakeIncidentRepo) TicketStatutID(_ context.Context, description string)
 		return idStatutEnAttenteTiers, nil
 	case domain.TicketStatutResolu:
 		return idStatutResolu, nil
+	case domain.TicketStatutEnAttenteConseilSyndical:
+		return idStatutEnAttenteConseilSyndical, nil
+	case domain.TicketStatutEnAttenteAssembleeGenerale:
+		return idStatutEnAttenteAssembleeGenerale, nil
 	}
 	return 0, errIntrouvable(description)
 }
@@ -256,6 +273,132 @@ func (f *fakeIncidentRepo) FindFactureByTicketID(_ context.Context, ticketID int
 	return f.factures[ticketID], nil
 }
 
+func (f *fakeIncidentRepo) FindTicketByID(_ context.Context, id int64) (*domain.Ticket, error) {
+	return f.tickets[id], nil
+}
+
+func (f *fakeIncidentRepo) DevisStatutID(_ context.Context, description string) (int64, error) {
+	switch description {
+	case domain.DevisStatutEnAttente:
+		return idDevisEnAttente, nil
+	case domain.DevisStatutRecu:
+		return idDevisRecu, nil
+	case domain.DevisStatutRetenu:
+		return idDevisRetenu, nil
+	case domain.DevisStatutRejete:
+		return idDevisRejete, nil
+	}
+	return 0, errIntrouvable(description)
+}
+
+func (f *fakeIncidentRepo) InsertDevis(_ context.Context, d *domain.Devis) (*domain.Devis, error) {
+	id := f.prochainDevisID
+	f.prochainDevisID++
+	copie := *d
+	copie.ID = id
+	f.devis[id] = &copie
+	return &copie, nil
+}
+
+func (f *fakeIncidentRepo) EnregistrerReceptionDevis(_ context.Context, devisID, statutRecuID, montantCentimes int64, dateReception time.Time) error {
+	d, ok := f.devis[devisID]
+	if !ok {
+		return errIntrouvable("devis")
+	}
+	d.StatutID = statutRecuID
+	d.MontantCentimes = &montantCentimes
+	d.DateReception = &dateReception
+	return nil
+}
+
+func (f *fakeIncidentRepo) MarquerDevisStatut(_ context.Context, devisID, statutID int64) error {
+	d, ok := f.devis[devisID]
+	if !ok {
+		return errIntrouvable("devis")
+	}
+	d.StatutID = statutID
+	return nil
+}
+
+func (f *fakeIncidentRepo) ListDevisByTicket(_ context.Context, ticketID int64) ([]*domain.Devis, error) {
+	var res []*domain.Devis
+	for _, d := range f.devis {
+		if d.TicketID == ticketID {
+			res = append(res, d)
+		}
+	}
+	return res, nil
+}
+
+func (f *fakeIncidentRepo) FindDelegationActive(_ context.Context, _, montantCentimes int64) (*domain.ConseilSyndicalDelegation, error) {
+	if f.delegation != nil && montantCentimes <= f.delegation.PlafondCentimes {
+		return f.delegation, nil
+	}
+	return nil, nil
+}
+
+func (f *fakeIncidentRepo) SetIncidentDevisRetenu(_ context.Context, ticketID, devisID int64) error {
+	if inc, ok := f.incidents[ticketID]; ok {
+		inc.DevisRetenuID = &devisID
+	}
+	return nil
+}
+
+func (f *fakeIncidentRepo) SetIncidentAvisCSDemande(_ context.Context, ticketID int64, demandeLe time.Time) error {
+	if inc, ok := f.incidents[ticketID]; ok {
+		inc.AvisCSDemandeLe = &demandeLe
+	}
+	return nil
+}
+
+func (f *fakeIncidentRepo) SetIncidentAvisCSRecu(_ context.Context, ticketID int64, recuLe time.Time, texte string) error {
+	if inc, ok := f.incidents[ticketID]; ok {
+		inc.AvisCSRecuLe = &recuLe
+		inc.AvisCSTexte = &texte
+	}
+	return nil
+}
+
+func (f *fakeIncidentRepo) SetIncidentDecisionCSDemande(_ context.Context, ticketID int64, demandeLe time.Time) error {
+	if inc, ok := f.incidents[ticketID]; ok {
+		inc.DecisionCSDemandeLe = &demandeLe
+	}
+	return nil
+}
+
+func (f *fakeIncidentRepo) SetIncidentDecisionCSRecue(_ context.Context, ticketID int64, recueLe time.Time) error {
+	if inc, ok := f.incidents[ticketID]; ok {
+		inc.DecisionCSRecueLe = &recueLe
+	}
+	return nil
+}
+
+func (f *fakeIncidentRepo) SetIncidentAGResolution(_ context.Context, ticketID int64, texte string, inscriteLe time.Time) error {
+	if inc, ok := f.incidents[ticketID]; ok {
+		inc.AGResolutionTexte = &texte
+		inc.AGInscriteLe = &inscriteLe
+	}
+	return nil
+}
+
+func (f *fakeIncidentRepo) SetIncidentAGResultat(_ context.Context, ticketID, resultatID int64, voteeLe time.Time) error {
+	if inc, ok := f.incidents[ticketID]; ok {
+		inc.AGResultatID = &resultatID
+		inc.AGVoteeLe = &voteeLe
+	}
+	return nil
+}
+
+func (f *fakeIncidentRepo) AGResultatID(_ context.Context, description string) (int64, error) {
+	switch description {
+	case domain.AGResultatApprouve:
+		return idAGApprouve, nil
+	case domain.AGResultatRejete:
+		return idAGRejete, nil
+	}
+	return 0, errIntrouvable(description)
+}
+
 func errIntrouvable(description string) error {
 	return &erreurLookup{description: description}
 }
@@ -328,28 +471,12 @@ func TestCreerIncidentSansContratActifAttenteGestionnaire(t *testing.T) {
 	}
 }
 
-func TestCreerIncidentMontantAuDelaDuPlafondAttenteGestionnaire(t *testing.T) {
-	repo := newFakeIncidentRepo()
-	categorie := categorieFuiteEau()
-	repo.contratActif = &repository.ContratActif{ContratID: 900, EntrepriseID: 42}
-	plafond := int64(10000)
-	repo.copropriete = &domain.Copropriete{ID: 1, PlafondOrdreServiceCentimes: &plafond}
-	montant := int64(99999) // dépasse le plafond D
-	claude := &fakeIncidentQualifieur{qualif: claudeapi.QualificationIncident{
-		CategorieTechnique:    &categorie,
-		Urgence:               domain.NiveauUrgenceMoyen,
-		MontantEstimeCentimes: &montant,
-	}}
-	svc := &IncidentService{Repo: repo, Claude: claude}
-
-	ticket, _, err := svc.CreerIncident(context.Background(), CreerIncidentInput{SourceID: 5, CoproprieteID: 1, Objet: "x", CorpsTexte: "y"})
-	if err != nil {
-		t.Fatalf("CreerIncident: %v", err)
-	}
-	if repo.statutsAppliques[ticket.ID] != idStatutEnAttenteGestionnaire {
-		t.Errorf("statut = %d, attendu en_attente_gestionnaire (%d) : montant au-delà du plafond D, devis requis (pas implémenté)", repo.statutsAppliques[ticket.ID], idStatutEnAttenteGestionnaire)
-	}
-}
+// Le cas "montant au-delà du plafond D" est désormais couvert par
+// TestCreerIncidentAuDelaDuPlafondDCreeUnDevis (demande de devis) et
+// TestCreerIncidentSeuilBFranchiFallbackHumain (mise en concurrence requise,
+// fallback humain) — l'ancien comportement "toujours en attente
+// gestionnaire au-delà du plafond D" a été remplacé par la chaîne de
+// décision réelle (cf. IncidentService.demarrerDevis).
 
 func TestEnregistrerRapportInterventionUrgenceFaibleJugeeInutile(t *testing.T) {
 	repo := newFakeIncidentRepo()
@@ -465,6 +592,236 @@ func TestRapprocherFactureClotureLeTicket(t *testing.T) {
 	}
 	if repo.statutsAppliques[1] != idStatutResolu {
 		t.Errorf("statut ticket = %d, attendu résolu (%d)", repo.statutsAppliques[1], idStatutResolu)
+	}
+}
+
+func TestCreerIncidentAuDelaDuPlafondDCreeUnDevis(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	categorie := categorieFuiteEau()
+	repo.contratActif = &repository.ContratActif{ContratID: 900, EntrepriseID: 42}
+	plafondD := int64(10000)
+	repo.copropriete = &domain.Copropriete{ID: 1, PlafondOrdreServiceCentimes: &plafondD} // pas de seuil B configuré
+	montant := int64(50000)                                                               // au-delà du plafond D
+	claude := &fakeIncidentQualifieur{qualif: claudeapi.QualificationIncident{
+		CategorieTechnique:    &categorie,
+		Urgence:               domain.NiveauUrgenceMoyen,
+		MontantEstimeCentimes: &montant,
+	}}
+	svc := &IncidentService{Repo: repo, Claude: claude}
+
+	ticket, _, err := svc.CreerIncident(context.Background(), CreerIncidentInput{SourceID: 5, CoproprieteID: 1, Objet: "x", CorpsTexte: "y"})
+	if err != nil {
+		t.Fatalf("CreerIncident: %v", err)
+	}
+	if repo.statutsAppliques[ticket.ID] != idStatutEnAttenteTiers {
+		t.Errorf("statut = %d, attendu en_attente_tiers (%d) : devis demandé au prestataire", repo.statutsAppliques[ticket.ID], idStatutEnAttenteTiers)
+	}
+	devisListe, _ := repo.ListDevisByTicket(context.Background(), ticket.ID)
+	if len(devisListe) != 1 {
+		t.Fatalf("devis créés = %d, attendu 1", len(devisListe))
+	}
+	if devisListe[0].StatutID != idDevisEnAttente {
+		t.Errorf("statut devis = %d, attendu en_attente (%d)", devisListe[0].StatutID, idDevisEnAttente)
+	}
+}
+
+func TestCreerIncidentSeuilBFranchiFallbackHumain(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	categorie := categorieFuiteEau()
+	repo.contratActif = &repository.ContratActif{ContratID: 900, EntrepriseID: 42}
+	plafondD := int64(10000)
+	seuilB := int64(40000)
+	repo.copropriete = &domain.Copropriete{ID: 1, PlafondOrdreServiceCentimes: &plafondD, SeuilBMiseEnConcurrenceCentimes: &seuilB}
+	montant := int64(50000) // au-delà du seuil B : mise en concurrence requise
+	claude := &fakeIncidentQualifieur{qualif: claudeapi.QualificationIncident{
+		CategorieTechnique:    &categorie,
+		Urgence:               domain.NiveauUrgenceMoyen,
+		MontantEstimeCentimes: &montant,
+	}}
+	svc := &IncidentService{Repo: repo, Claude: claude}
+
+	ticket, _, err := svc.CreerIncident(context.Background(), CreerIncidentInput{SourceID: 5, CoproprieteID: 1, Objet: "x", CorpsTexte: "y"})
+	if err != nil {
+		t.Fatalf("CreerIncident: %v", err)
+	}
+	if repo.statutsAppliques[ticket.ID] != idStatutEnAttenteGestionnaire {
+		t.Errorf("statut = %d, attendu en_attente_gestionnaire (%d) : mise en concurrence non automatisable", repo.statutsAppliques[ticket.ID], idStatutEnAttenteGestionnaire)
+	}
+	if devisListe, _ := repo.ListDevisByTicket(context.Background(), ticket.ID); len(devisListe) != 0 {
+		t.Errorf("devis créés = %d, attendu 0 (mise en concurrence non gérée automatiquement)", len(devisListe))
+	}
+}
+
+// seedTicketAvecDevisRecu prépare un ticket+incident+devis "en_attente"
+// prêt à recevoir sa réponse (EnregistrerDevisRecu), pour les tests de la
+// chaîne de décision post-devis.
+func seedTicketAvecDevisEnAttente(repo *fakeIncidentRepo, ticketID, coproprieteID int64) int64 {
+	repo.tickets[ticketID] = &domain.Ticket{ID: ticketID, CoproprieteID: coproprieteID}
+	repo.incidents[ticketID] = &domain.Incident{TicketID: ticketID}
+	devisID := repo.prochainDevisID
+	repo.devis[devisID] = &domain.Devis{ID: devisID, TicketID: ticketID, PrestataireID: 42, StatutID: idDevisEnAttente}
+	repo.prochainDevisID++
+	return devisID
+}
+
+func TestEnregistrerDevisRecuAvecDelegationActive(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	repo.copropriete = &domain.Copropriete{ID: 1}
+	repo.delegation = &domain.ConseilSyndicalDelegation{ID: 1, CoproprieteID: 1, PlafondCentimes: 100000}
+	devisID := seedTicketAvecDevisEnAttente(repo, 1, 1)
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerDevisRecu(context.Background(), 1, devisID, 50000); err != nil {
+		t.Fatalf("EnregistrerDevisRecu: %v", err)
+	}
+	if repo.devis[devisID].StatutID != idDevisRecu {
+		t.Errorf("statut devis = %d, attendu recu (%d)", repo.devis[devisID].StatutID, idDevisRecu)
+	}
+	if repo.incidents[1].DecisionCSDemandeLe == nil {
+		t.Error("DecisionCSDemandeLe non renseigné : la délégation active aurait dû être détectée")
+	}
+	if repo.statutsAppliques[1] != idStatutEnAttenteConseilSyndical {
+		t.Errorf("statut ticket = %d, attendu en_attente_conseil_syndical (%d)", repo.statutsAppliques[1], idStatutEnAttenteConseilSyndical)
+	}
+}
+
+func TestEnregistrerDevisRecuSeuilAFranchiSansDelegation(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	seuilA := int64(20000)
+	repo.copropriete = &domain.Copropriete{ID: 1, SeuilAConsultationCSCentimes: &seuilA}
+	devisID := seedTicketAvecDevisEnAttente(repo, 1, 1)
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerDevisRecu(context.Background(), 1, devisID, 50000); err != nil {
+		t.Fatalf("EnregistrerDevisRecu: %v", err)
+	}
+	if repo.incidents[1].AvisCSDemandeLe == nil {
+		t.Error("AvisCSDemandeLe non renseigné : le seuil A aurait dû être détecté comme franchi")
+	}
+	if repo.statutsAppliques[1] != idStatutEnAttenteConseilSyndical {
+		t.Errorf("statut ticket = %d, attendu en_attente_conseil_syndical (%d)", repo.statutsAppliques[1], idStatutEnAttenteConseilSyndical)
+	}
+}
+
+func TestEnregistrerDevisRecuDecisionDirecte(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	repo.copropriete = &domain.Copropriete{ID: 1} // aucun seuil configuré : décision directe
+	devisID := seedTicketAvecDevisEnAttente(repo, 1, 1)
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerDevisRecu(context.Background(), 1, devisID, 50000); err != nil {
+		t.Fatalf("EnregistrerDevisRecu: %v", err)
+	}
+	if repo.devis[devisID].StatutID != idDevisRetenu {
+		t.Errorf("statut devis = %d, attendu retenu (%d)", repo.devis[devisID].StatutID, idDevisRetenu)
+	}
+	if repo.incidents[1].DevisRetenuID == nil || *repo.incidents[1].DevisRetenuID != devisID {
+		t.Errorf("DevisRetenuID = %v, attendu %d", repo.incidents[1].DevisRetenuID, devisID)
+	}
+	if repo.statutsAppliques[1] != idStatutEnAttenteTiers {
+		t.Errorf("statut ticket = %d, attendu en_attente_tiers (%d)", repo.statutsAppliques[1], idStatutEnAttenteTiers)
+	}
+}
+
+func TestEnregistrerDevisRecuAuDelaDuPouvoirSyndicPasseEnAG(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	seuilSyndic := int64(20000)
+	repo.copropriete = &domain.Copropriete{ID: 1, SeuilPouvoirSyndicCentimes: &seuilSyndic}
+	devisID := seedTicketAvecDevisEnAttente(repo, 1, 1)
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerDevisRecu(context.Background(), 1, devisID, 50000); err != nil {
+		t.Fatalf("EnregistrerDevisRecu: %v", err)
+	}
+	if repo.incidents[1].AGResolutionTexte == nil {
+		t.Error("AGResolutionTexte non renseigné : le pouvoir ordinaire du syndic aurait dû être détecté comme dépassé")
+	}
+	if repo.statutsAppliques[1] != idStatutEnAttenteAssembleeGenerale {
+		t.Errorf("statut ticket = %d, attendu en_attente_assemblee_generale (%d)", repo.statutsAppliques[1], idStatutEnAttenteAssembleeGenerale)
+	}
+}
+
+func TestEnregistrerDecisionCS(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	repo.tickets[1] = &domain.Ticket{ID: 1, CoproprieteID: 1}
+	repo.incidents[1] = &domain.Incident{TicketID: 1}
+	repo.devis[9] = &domain.Devis{ID: 9, TicketID: 1, StatutID: idDevisRecu}
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerDecisionCS(context.Background(), 1); err != nil {
+		t.Fatalf("EnregistrerDecisionCS: %v", err)
+	}
+	if repo.incidents[1].DecisionCSRecueLe == nil {
+		t.Error("DecisionCSRecueLe non renseigné")
+	}
+	if repo.devis[9].StatutID != idDevisRetenu {
+		t.Errorf("statut devis = %d, attendu retenu (%d)", repo.devis[9].StatutID, idDevisRetenu)
+	}
+	if repo.statutsAppliques[1] != idStatutEnAttenteTiers {
+		t.Errorf("statut ticket = %d, attendu en_attente_tiers (%d)", repo.statutsAppliques[1], idStatutEnAttenteTiers)
+	}
+}
+
+func TestEnregistrerAvisCSAuDelaDuPouvoirSyndicPasseEnAG(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	seuilSyndic := int64(20000)
+	repo.copropriete = &domain.Copropriete{ID: 1, SeuilPouvoirSyndicCentimes: &seuilSyndic}
+	repo.tickets[1] = &domain.Ticket{ID: 1, CoproprieteID: 1}
+	repo.incidents[1] = &domain.Incident{TicketID: 1}
+	montant := int64(50000)
+	repo.devis[9] = &domain.Devis{ID: 9, TicketID: 1, StatutID: idDevisRecu, MontantCentimes: &montant}
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerAvisCS(context.Background(), 1, "Avis favorable du conseil syndical."); err != nil {
+		t.Fatalf("EnregistrerAvisCS: %v", err)
+	}
+	if repo.incidents[1].AvisCSTexte == nil || *repo.incidents[1].AvisCSTexte != "Avis favorable du conseil syndical." {
+		t.Errorf("AvisCSTexte = %v, attendu le texte fourni", repo.incidents[1].AvisCSTexte)
+	}
+	if repo.statutsAppliques[1] != idStatutEnAttenteAssembleeGenerale {
+		t.Errorf("statut ticket = %d, attendu en_attente_assemblee_generale (%d) : avis consultatif, ne dispense pas du seuil pouvoir syndic", repo.statutsAppliques[1], idStatutEnAttenteAssembleeGenerale)
+	}
+}
+
+func TestEnregistrerResultatAGApprouveRetientLeDevis(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	repo.tickets[1] = &domain.Ticket{ID: 1}
+	repo.incidents[1] = &domain.Incident{TicketID: 1}
+	repo.devis[9] = &domain.Devis{ID: 9, TicketID: 1, StatutID: idDevisRecu}
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerResultatAG(context.Background(), 1, true); err != nil {
+		t.Fatalf("EnregistrerResultatAG: %v", err)
+	}
+	if repo.incidents[1].AGResultatID == nil || *repo.incidents[1].AGResultatID != idAGApprouve {
+		t.Errorf("AGResultatID = %v, attendu approuve (%d)", repo.incidents[1].AGResultatID, idAGApprouve)
+	}
+	if repo.devis[9].StatutID != idDevisRetenu {
+		t.Errorf("statut devis = %d, attendu retenu (%d)", repo.devis[9].StatutID, idDevisRetenu)
+	}
+	if repo.statutsAppliques[1] != idStatutEnAttenteTiers {
+		t.Errorf("statut ticket = %d, attendu en_attente_tiers (%d)", repo.statutsAppliques[1], idStatutEnAttenteTiers)
+	}
+}
+
+func TestEnregistrerResultatAGRejeteAttenteGestionnaire(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	repo.tickets[1] = &domain.Ticket{ID: 1}
+	repo.incidents[1] = &domain.Incident{TicketID: 1}
+	repo.devis[9] = &domain.Devis{ID: 9, TicketID: 1, StatutID: idDevisRecu}
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerResultatAG(context.Background(), 1, false); err != nil {
+		t.Fatalf("EnregistrerResultatAG: %v", err)
+	}
+	if repo.incidents[1].AGResultatID == nil || *repo.incidents[1].AGResultatID != idAGRejete {
+		t.Errorf("AGResultatID = %v, attendu rejete (%d)", repo.incidents[1].AGResultatID, idAGRejete)
+	}
+	if repo.devis[9].StatutID != idDevisRecu {
+		t.Errorf("statut devis = %d, ne devrait pas changer (résolution rejetée)", repo.devis[9].StatutID)
+	}
+	if repo.statutsAppliques[1] != idStatutEnAttenteGestionnaire {
+		t.Errorf("statut ticket = %d, attendu en_attente_gestionnaire (%d) : cas non prévu par le graphe", repo.statutsAppliques[1], idStatutEnAttenteGestionnaire)
 	}
 }
 

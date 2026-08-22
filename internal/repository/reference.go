@@ -136,3 +136,15 @@ func (c *Client) VerificationResultatID(ctx context.Context, description string)
 func (c *Client) FactureStatutID(ctx context.Context, description string) (int64, error) {
 	return c.lookupReferenceID(ctx, "facture_statut", description)
 }
+
+// DevisStatutID retrouve l'ID de devis_statut pour la description donnée
+// (voir les constantes domain.DevisStatut*).
+func (c *Client) DevisStatutID(ctx context.Context, description string) (int64, error) {
+	return c.lookupReferenceID(ctx, "devis_statut", description)
+}
+
+// AGResultatID retrouve l'ID de ag_resultat pour la description donnée
+// (voir les constantes domain.AGResultat*).
+func (c *Client) AGResultatID(ctx context.Context, description string) (int64, error) {
+	return c.lookupReferenceID(ctx, "ag_resultat", description)
+}

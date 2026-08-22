@@ -37,6 +37,9 @@ type coproprieteRow struct {
 	Reference                         string     `json:"reference"`
 	BanqueID                          *int64     `json:"banque_id"`
 	PlafondOrdreServiceCentimes       *int64     `json:"plafond_ordre_service_centimes"`
+	SeuilAConsultationCSCentimes      *int64     `json:"seuil_a_centimes"`
+	SeuilBMiseEnConcurrenceCentimes   *int64     `json:"seuil_b_centimes"`
+	SeuilPouvoirSyndicCentimes        *int64     `json:"seuil_pouvoir_syndic_centimes"`
 }
 
 func (r coproprieteRow) toDomain() *domain.Copropriete {
@@ -67,6 +70,9 @@ func (r coproprieteRow) toDomain() *domain.Copropriete {
 		Reference:                         r.Reference,
 		BanqueID:                          r.BanqueID,
 		PlafondOrdreServiceCentimes:       r.PlafondOrdreServiceCentimes,
+		SeuilAConsultationCSCentimes:      r.SeuilAConsultationCSCentimes,
+		SeuilBMiseEnConcurrenceCentimes:   r.SeuilBMiseEnConcurrenceCentimes,
+		SeuilPouvoirSyndicCentimes:        r.SeuilPouvoirSyndicCentimes,
 	}
 }
 
