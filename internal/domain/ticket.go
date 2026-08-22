@@ -45,6 +45,12 @@ type TicketStatut struct {
 // saisie manuelle (type "manuel", cf. domain.TicketSourceType) — pas de
 // champ Declarant séparé, la personne à l'origine se lit sur
 // TicketSource.PersonneID (via SourceID).
+//
+// ParentID permet une arborescence de tickets : un ticket créé en réaction
+// à un autre (ex: un gestionnaire ouvre un ticket vers un prestataire à la
+// suite d'un incident signalé par un occupant) référence son ticket
+// d'origine — nul pour un ticket racine. Même principe que
+// SousAction.ParentID (auto-référence, profondeur arbitraire).
 type Ticket struct {
 	ID              int64
 	CreatedAt       time.Time
@@ -55,6 +61,7 @@ type Ticket struct {
 	SourceID        int64  // FK -> ticket_source.id, NOT NULL
 	CoproprieteID   int64  // FK -> copropriete.id, NOT NULL
 	LotID           *int64 // FK -> lot.id, nul = partie commune
+	ParentID        *int64 // FK -> ticket.id, nul si ticket racine
 	AssigneA        *int64 // FK -> personne.id (collaborateur en charge)
 	CreePar         *int64 // FK -> personne.id (gestionnaire à l'origine de la création)
 	DateDeclaration time.Time
