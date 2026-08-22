@@ -16,6 +16,13 @@ const (
 	TicketStatutEnAttenteAssembleeGenerale = "en_attente_assemblee_generale"
 	TicketStatutResolu                     = "resolu"
 	TicketStatutFerme                      = "ferme"
+
+	// TicketStatutLitige : réclamation refusée par le prestataire (phase
+	// 5.3.5) — paiement suspendu (déjà garanti par la vérification négative
+	// sous-jacente, cf. Incident.VerificationResultatID et service.
+	// IncidentService.MettreEnPaiement), résolution hors du périmètre de ce
+	// graphe (traitée séparément).
+	TicketStatutLitige = "litige"
 )
 
 // TicketStatut est la table de référence du statut d'un Ticket — partagée

@@ -172,9 +172,41 @@ func (c *Client) SetIncidentRapportIntervention(ctx context.Context, ticketID in
 // SetIncidentModeVerification enregistre le mode de vérification retenu
 // (phase 5.0), et immédiatement le résultat quand le mode le détermine déjà
 // (ex: "jugee_inutile" vaut positive) — resultatID peut être nil si le
-// résultat reste à venir (ex: confirmation demandée à l'occupant).
+// résultat reste à venir (ex: confirmation demandée à l'occupant), mais
+// n'efface alors PAS un résultat déjà enregistré par un cycle de
+// vérification précédent : incidentPatch omet les champs nil (omitempty),
+// donc un pointeur nil ici laisse simplement la valeur existante en base
+// inchangée. Pour redémarrer un nouveau cycle de vérification après une
+// réclamation acceptée (phase 5.3.4, un ancien résultat négatif ne doit pas
+// survivre), utiliser SetIncidentModeVerificationNouveauCycle à la place.
 func (c *Client) SetIncidentModeVerification(ctx context.Context, ticketID, modeID int64, resultatID *int64) error {
 	return c.updateIncident(ctx, ticketID, incidentPatch{ModeVerificationID: &modeID, VerificationResultatID: resultatID})
+}
+
+// incidentResetVerificationPatch, à la différence de incidentPatch, envoie
+// explicitement `null` pour verification_resultat_id et date_resolution
+// (pas de `omitempty` sur ces deux champs) — nécessaire pour effacer un
+// résultat de vérification devenu obsolète, ce qu'un pointeur nil dans
+// incidentPatch ne peut pas faire (cf. doc de SetIncidentModeVerification).
+type incidentResetVerificationPatch struct {
+	ModeVerificationID     int64      `json:"mode_verification_id"`
+	VerificationResultatID *int64     `json:"verification_resultat_id"`
+	DateResolution         *time.Time `json:"date_resolution"`
+}
+
+// SetIncidentModeVerificationNouveauCycle enregistre un nouveau mode de
+// vérification en effaçant explicitement tout résultat et toute date de
+// résolution d'un cycle de vérification précédent — à utiliser quand une
+// intervention reprend après une réclamation acceptée (phase 5.3.4),
+// jamais lors du tout premier cycle où SetIncidentModeVerification suffit
+// (les colonnes sont alors déjà nulles).
+func (c *Client) SetIncidentModeVerificationNouveauCycle(ctx context.Context, ticketID, modeID int64) error {
+	path := fmt.Sprintf("/incident?ticket_id=eq.%d", ticketID)
+	payload := incidentResetVerificationPatch{ModeVerificationID: modeID}
+	if err := c.do(ctx, http.MethodPatch, path, payload, nil); err != nil {
+		return fmt.Errorf("repository: nouveau cycle de vérification (reset) ticket_id=%d: %w", ticketID, err)
+	}
+	return nil
 }
 
 // SetIncidentVerificationResultat enregistre le résultat de la vérification

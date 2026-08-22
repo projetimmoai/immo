@@ -22,6 +22,7 @@ const (
 	idStatutResolu                     = 14
 	idStatutEnAttenteConseilSyndical   = 15
 	idStatutEnAttenteAssembleeGenerale = 16
+	idStatutLitige                     = 17
 	idCategorieFuiteEau                = 20
 	idUrgenceFaible                    = 30
 	idUrgenceMoyen                     = 31
@@ -39,6 +40,9 @@ const (
 	idDevisRejete                      = 73
 	idAGApprouve                       = 80
 	idAGRejete                         = 81
+	idReclamationEnvoyee               = 90
+	idReclamationAcceptee              = 91
+	idReclamationRefusee               = 92
 )
 
 // fakeIncidentRepo simule incidentRepo — un registre en mémoire plutôt qu'un
@@ -52,13 +56,15 @@ type fakeIncidentRepo struct {
 	contratActif *repository.ContratActif
 	delegation   *domain.ConseilSyndicalDelegation // simplifié : actif dès qu'il couvre le montant, pas de vraies dates
 
-	prochainTicketID   int64
-	tickets            map[int64]*domain.Ticket
-	incidents          map[int64]*domain.Incident
-	factures           map[int64]*domain.Facture
-	prochaineFactureID int64
-	devis              map[int64]*domain.Devis
-	prochainDevisID    int64
+	prochainTicketID       int64
+	tickets                map[int64]*domain.Ticket
+	incidents              map[int64]*domain.Incident
+	factures               map[int64]*domain.Facture
+	prochaineFactureID     int64
+	devis                  map[int64]*domain.Devis
+	prochainDevisID        int64
+	reclamations           map[int64]*domain.Reclamation
+	prochaineReclamationID int64
 
 	// Enregistrements des appels, pour les assertions des tests.
 	statutsAppliques    map[int64]int64 // ticket_id -> dernier statut_id appliqué
@@ -67,15 +73,17 @@ type fakeIncidentRepo struct {
 
 func newFakeIncidentRepo() *fakeIncidentRepo {
 	return &fakeIncidentRepo{
-		prochainTicketID:    1,
-		prochaineFactureID:  1,
-		prochainDevisID:     1,
-		tickets:             map[int64]*domain.Ticket{},
-		incidents:           map[int64]*domain.Incident{},
-		factures:            map[int64]*domain.Facture{},
-		devis:               map[int64]*domain.Devis{},
-		statutsAppliques:    map[int64]int64{},
-		prestatairesDefinis: map[int64]int64{},
+		prochainTicketID:       1,
+		prochaineFactureID:     1,
+		prochainDevisID:        1,
+		tickets:                map[int64]*domain.Ticket{},
+		incidents:              map[int64]*domain.Incident{},
+		factures:               map[int64]*domain.Facture{},
+		devis:                  map[int64]*domain.Devis{},
+		prochaineReclamationID: 1,
+		reclamations:           map[int64]*domain.Reclamation{},
+		statutsAppliques:       map[int64]int64{},
+		prestatairesDefinis:    map[int64]int64{},
 	}
 }
 
@@ -102,6 +110,8 @@ func (f *fakeIncidentRepo) TicketStatutID(_ context.Context, description string)
 		return idStatutEnAttenteConseilSyndical, nil
 	case domain.TicketStatutEnAttenteAssembleeGenerale:
 		return idStatutEnAttenteAssembleeGenerale, nil
+	case domain.TicketStatutLitige:
+		return idStatutLitige, nil
 	}
 	return 0, errIntrouvable(description)
 }
@@ -399,6 +409,47 @@ func (f *fakeIncidentRepo) AGResultatID(_ context.Context, description string) (
 	return 0, errIntrouvable(description)
 }
 
+func (f *fakeIncidentRepo) SetIncidentModeVerificationNouveauCycle(_ context.Context, ticketID, modeID int64) error {
+	if inc, ok := f.incidents[ticketID]; ok {
+		inc.ModeVerificationID = &modeID
+		inc.VerificationResultatID = nil
+		inc.DateResolution = nil
+	}
+	return nil
+}
+
+func (f *fakeIncidentRepo) ReclamationStatutID(_ context.Context, description string) (int64, error) {
+	switch description {
+	case domain.ReclamationStatutEnvoyee:
+		return idReclamationEnvoyee, nil
+	case domain.ReclamationStatutAcceptee:
+		return idReclamationAcceptee, nil
+	case domain.ReclamationStatutRefusee:
+		return idReclamationRefusee, nil
+	}
+	return 0, errIntrouvable(description)
+}
+
+func (f *fakeIncidentRepo) InsertReclamation(_ context.Context, r *domain.Reclamation) (*domain.Reclamation, error) {
+	id := f.prochaineReclamationID
+	f.prochaineReclamationID++
+	copie := *r
+	copie.ID = id
+	f.reclamations[id] = &copie
+	return &copie, nil
+}
+
+func (f *fakeIncidentRepo) EnregistrerReponseReclamation(_ context.Context, reclamationID, statutID int64, dateReponse time.Time, reponseTexte string) error {
+	r, ok := f.reclamations[reclamationID]
+	if !ok {
+		return errIntrouvable("reclamation")
+	}
+	r.StatutID = statutID
+	r.DateReponse = &dateReponse
+	r.ReponseTexte = &reponseTexte
+	return nil
+}
+
 func errIntrouvable(description string) error {
 	return &erreurLookup{description: description}
 }
@@ -519,9 +570,9 @@ func TestEnregistrerRapportInterventionUrgenceMoyenneDemandeConfirmation(t *test
 	}
 }
 
-func TestEnregistrerConfirmationOccupantNegativeAttenteGestionnaire(t *testing.T) {
+func TestEnregistrerConfirmationOccupantNegativeSansPrestataireAttenteGestionnaire(t *testing.T) {
 	repo := newFakeIncidentRepo()
-	repo.incidents[1] = &domain.Incident{TicketID: 1}
+	repo.incidents[1] = &domain.Incident{TicketID: 1} // pas de prestataire connu (ne devrait pas arriver à ce stade)
 	svc := &IncidentService{Repo: repo}
 
 	if err := svc.EnregistrerConfirmationOccupant(context.Background(), 1, false); err != nil {
@@ -532,7 +583,105 @@ func TestEnregistrerConfirmationOccupantNegativeAttenteGestionnaire(t *testing.T
 		t.Errorf("VerificationResultatID = %v, attendu negative (%d)", inc.VerificationResultatID, idResultatNegative)
 	}
 	if repo.statutsAppliques[1] != idStatutEnAttenteGestionnaire {
-		t.Errorf("statut = %d, attendu en_attente_gestionnaire (%d)", repo.statutsAppliques[1], idStatutEnAttenteGestionnaire)
+		t.Errorf("statut = %d, attendu en_attente_gestionnaire (%d) : pas de prestataire, la réclamation est impossible", repo.statutsAppliques[1], idStatutEnAttenteGestionnaire)
+	}
+}
+
+func TestEnregistrerConfirmationOccupantNegativeDemarreReclamation(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	repo.tickets[1] = &domain.Ticket{ID: 1}
+	repo.incidents[1] = &domain.Incident{TicketID: 1, PrestataireID: int64Ptr(42)}
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerConfirmationOccupant(context.Background(), 1, false); err != nil {
+		t.Fatalf("EnregistrerConfirmationOccupant: %v", err)
+	}
+	if repo.statutsAppliques[1] != idStatutEnAttenteTiers {
+		t.Errorf("statut = %d, attendu en_attente_tiers (%d) : réclamation envoyée, en attente de la réponse du prestataire", repo.statutsAppliques[1], idStatutEnAttenteTiers)
+	}
+	var trouvee *domain.Reclamation
+	for _, r := range repo.reclamations {
+		if r.TicketID == 1 {
+			trouvee = r
+		}
+	}
+	if trouvee == nil {
+		t.Fatal("aucune réclamation créée")
+	}
+	if trouvee.PrestataireID != 42 {
+		t.Errorf("PrestataireID = %d, attendu 42", trouvee.PrestataireID)
+	}
+	if trouvee.StatutID != idReclamationEnvoyee {
+		t.Errorf("StatutID = %d, attendu envoyee (%d)", trouvee.StatutID, idReclamationEnvoyee)
+	}
+}
+
+func TestEnregistrerReponseReclamationAccepteeRetourPhase4(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	repo.tickets[1] = &domain.Ticket{ID: 1}
+	repo.reclamations[9] = &domain.Reclamation{ID: 9, TicketID: 1, StatutID: idReclamationEnvoyee}
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerReponseReclamation(context.Background(), 1, 9, true, "D'accord, je reviens corriger."); err != nil {
+		t.Fatalf("EnregistrerReponseReclamation: %v", err)
+	}
+	if repo.reclamations[9].StatutID != idReclamationAcceptee {
+		t.Errorf("StatutID = %d, attendu acceptee (%d)", repo.reclamations[9].StatutID, idReclamationAcceptee)
+	}
+	if repo.reclamations[9].ReponseTexte == nil || *repo.reclamations[9].ReponseTexte != "D'accord, je reviens corriger." {
+		t.Errorf("ReponseTexte = %v, attendu le texte fourni", repo.reclamations[9].ReponseTexte)
+	}
+	if repo.statutsAppliques[1] != idStatutEnAttenteTiers {
+		t.Errorf("statut = %d, attendu en_attente_tiers (%d) : retour phase 4, nouvelle intervention", repo.statutsAppliques[1], idStatutEnAttenteTiers)
+	}
+}
+
+func TestEnregistrerReponseReclamationRefuseeLitige(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	repo.tickets[1] = &domain.Ticket{ID: 1}
+	repo.reclamations[9] = &domain.Reclamation{ID: 9, TicketID: 1, StatutID: idReclamationEnvoyee}
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerReponseReclamation(context.Background(), 1, 9, false, "Le travail a été fait correctement."); err != nil {
+		t.Fatalf("EnregistrerReponseReclamation: %v", err)
+	}
+	if repo.reclamations[9].StatutID != idReclamationRefusee {
+		t.Errorf("StatutID = %d, attendu refusee (%d)", repo.reclamations[9].StatutID, idReclamationRefusee)
+	}
+	if repo.statutsAppliques[1] != idStatutLitige {
+		t.Errorf("statut = %d, attendu litige (%d)", repo.statutsAppliques[1], idStatutLitige)
+	}
+}
+
+// TestNouveauCycleVerificationEffaceAncienResultatNegatif reproduit le
+// scénario réclamation acceptée -> nouvelle intervention -> nouveau rapport
+// : l'ancien résultat "negative" (et sa date de résolution) ne doit pas
+// survivre au nouveau cycle de vérification (cf. bug corrigé,
+// SetIncidentModeVerificationNouveauCycle plutôt que SetIncidentModeVerification).
+func TestNouveauCycleVerificationEffaceAncienResultatNegatif(t *testing.T) {
+	repo := newFakeIncidentRepo()
+	ancienneDate := time.Now().UTC()
+	repo.incidents[1] = &domain.Incident{
+		TicketID:               1,
+		UrgenceID:              int64Ptr(idUrgenceMoyen), // pas "faible" : voie confirmation occupant
+		VerificationResultatID: int64Ptr(idResultatNegative),
+		DateResolution:         &ancienneDate,
+	}
+	repo.tickets[1] = &domain.Ticket{ID: 1}
+	svc := &IncidentService{Repo: repo}
+
+	if err := svc.EnregistrerRapportIntervention(context.Background(), 1, "Deuxième intervention, réparation refaite."); err != nil {
+		t.Fatalf("EnregistrerRapportIntervention: %v", err)
+	}
+	inc := repo.incidents[1]
+	if inc.VerificationResultatID != nil {
+		t.Errorf("VerificationResultatID = %v, attendu nil (nouveau cycle, ancien résultat négatif effacé)", inc.VerificationResultatID)
+	}
+	if inc.DateResolution != nil {
+		t.Errorf("DateResolution = %v, attendu nil (nouveau cycle, ancienne date effacée)", inc.DateResolution)
+	}
+	if inc.ModeVerificationID == nil || *inc.ModeVerificationID != idModeConfirmationOccupant {
+		t.Errorf("ModeVerificationID = %v, attendu confirmation_occupant (%d)", inc.ModeVerificationID, idModeConfirmationOccupant)
 	}
 }
 

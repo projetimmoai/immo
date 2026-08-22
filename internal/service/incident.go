@@ -53,6 +53,11 @@ type incidentRepo interface {
 	SetIncidentAGResolution(ctx context.Context, ticketID int64, texte string, inscriteLe time.Time) error
 	SetIncidentAGResultat(ctx context.Context, ticketID, resultatID int64, voteeLe time.Time) error
 	AGResultatID(ctx context.Context, description string) (int64, error)
+
+	SetIncidentModeVerificationNouveauCycle(ctx context.Context, ticketID, modeID int64) error
+	ReclamationStatutID(ctx context.Context, description string) (int64, error)
+	InsertReclamation(ctx context.Context, r *domain.Reclamation) (*domain.Reclamation, error)
+	EnregistrerReponseReclamation(ctx context.Context, reclamationID, statutID int64, dateReponse time.Time, reponseTexte string) error
 }
 
 // incidentQualifieur est la portion de claudeapi.Client utilisée ici — une
@@ -77,13 +82,16 @@ type incidentQualifieur interface {
 // prestataire.
 //
 // Volontairement hors de cette tranche (laissés pour un prochain jalon) :
-// réclamation/litige, vérification par un gestionnaire humain sur place,
-// sélection d'un prestataire dans un répertoire par zone d'intervention
-// (pas encore modélisé), rédaction réelle des communications (demande de
-// devis, d'avis, résolution AG — de simples enregistrements pour l'instant,
-// aucun envoi réel), et l'automatisation des relances (aucun worker
-// périodique pour l'instant : les étapes "en attente" sont enregistrées
-// mais ne sont pas relancées automatiquement).
+// vérification par un gestionnaire humain sur place (phase 5.2, qui peut
+// aussi déclencher une réclamation — seule la voie occupant y mène pour
+// l'instant), résolution effective d'un litige (phase 5.3.5 s'arrête à
+// l'état "litige", traité par un futur graphe dédié), sélection d'un
+// prestataire dans un répertoire par zone d'intervention (pas encore
+// modélisé), rédaction réelle des communications (demande de devis,
+// d'avis, résolution AG, réclamation — de simples enregistrements pour
+// l'instant, aucun envoi réel), et l'automatisation des relances (aucun
+// worker périodique pour l'instant : les étapes "en attente" sont
+// enregistrées mais ne sont pas relancées automatiquement).
 type IncidentService struct {
 	Repo   incidentRepo
 	Claude incidentQualifieur
@@ -550,7 +558,11 @@ func (s *IncidentService) EnregistrerRapportIntervention(ctx context.Context, ti
 	if err != nil {
 		return fmt.Errorf("service: rapport d'intervention ticket_id=%d: résolution du mode confirmation occupant: %w", ticketID, err)
 	}
-	if err := s.Repo.SetIncidentModeVerification(ctx, ticketID, modeID, nil); err != nil {
+	// SetIncidentModeVerificationNouveauCycle (et non SetIncidentModeVerification)
+	// : efface explicitement un résultat/date de résolution d'un cycle de
+	// vérification précédent, au cas où ce rapport fait suite à une
+	// réclamation acceptée (phase 5.3.4) plutôt qu'au tout premier cycle.
+	if err := s.Repo.SetIncidentModeVerificationNouveauCycle(ctx, ticketID, modeID); err != nil {
 		return fmt.Errorf("service: rapport d'intervention ticket_id=%d: enregistrement du mode de vérification: %w", ticketID, err)
 	}
 	statutAttenteEmetteurID, err := s.Repo.TicketStatutID(ctx, domain.TicketStatutEnAttenteEmetteur)
@@ -591,13 +603,86 @@ func (s *IncidentService) EnregistrerConfirmationOccupant(ctx context.Context, t
 	}
 
 	// Non-résolution (phase 5.1.5) : réclamation auprès du prestataire
-	// (phase 5.3) pas encore implémentée — un gestionnaire humain reprend
-	// la main.
-	statutAttenteGestionnaireID, err := s.Repo.TicketStatutID(ctx, domain.TicketStatutEnAttenteGestionnaire)
-	if err != nil {
-		return fmt.Errorf("service: confirmation occupant ticket_id=%d: résolution du statut en_attente_gestionnaire: %w", ticketID, err)
+	// (phase 5.3).
+	if err := s.demarrerReclamation(ctx, ticketID); err != nil {
+		return fmt.Errorf("service: confirmation occupant ticket_id=%d: %w", ticketID, err)
 	}
-	return s.Repo.UpdateTicketStatut(ctx, ticketID, statutAttenteGestionnaireID)
+	return nil
+}
+
+// demarrerReclamation couvre la phase 5.3.1 : réclamation rédigée et
+// adressée au prestataire, qu'elle vienne d'une non-résolution signalée par
+// l'occupant (phase 5.1.5) ou, plus tard, d'un constat du gestionnaire
+// humain sur place (phase 5.2.3, pas encore implémenté). Sans prestataire
+// connu sur l'incident (ne devrait pas arriver à ce stade du graphe), le
+// ticket reste en attente d'un gestionnaire humain plutôt que d'échouer.
+func (s *IncidentService) demarrerReclamation(ctx context.Context, ticketID int64) error {
+	incident, err := s.Repo.FindIncidentByTicketID(ctx, ticketID)
+	if err != nil {
+		return fmt.Errorf("chargement de l'incident: %w", err)
+	}
+	if incident == nil || incident.PrestataireID == nil {
+		statutID, err := s.Repo.TicketStatutID(ctx, domain.TicketStatutEnAttenteGestionnaire)
+		if err != nil {
+			return fmt.Errorf("résolution du statut en_attente_gestionnaire: %w", err)
+		}
+		return s.Repo.UpdateTicketStatut(ctx, ticketID, statutID)
+	}
+
+	statutEnvoyeeID, err := s.Repo.ReclamationStatutID(ctx, domain.ReclamationStatutEnvoyee)
+	if err != nil {
+		return fmt.Errorf("résolution du statut reclamation envoyee: %w", err)
+	}
+	maintenant := time.Now().UTC()
+	texte := "Réclamation : le problème signalé ne semble pas résolu après votre intervention. Merci de revenir constater et corriger."
+	if _, err := s.Repo.InsertReclamation(ctx, &domain.Reclamation{
+		TicketID:      ticketID,
+		PrestataireID: *incident.PrestataireID,
+		Texte:         texte,
+		StatutID:      statutEnvoyeeID,
+		DateEnvoi:     &maintenant,
+	}); err != nil {
+		return fmt.Errorf("envoi de la réclamation: %w", err)
+	}
+
+	// En attente de la réponse du prestataire — même statut que l'attente
+	// d'intervention (cf. passerEnSuiviIntervention) : dans les deux cas,
+	// c'est le prestataire qui doit agir ensuite.
+	statutAttenteTiersID, err := s.Repo.TicketStatutID(ctx, domain.TicketStatutEnAttenteTiers)
+	if err != nil {
+		return fmt.Errorf("résolution du statut en_attente_tiers: %w", err)
+	}
+	return s.Repo.UpdateTicketStatut(ctx, ticketID, statutAttenteTiersID)
+}
+
+// EnregistrerReponseReclamation couvre la phase 5.3.2 : réponse du
+// prestataire à une réclamation. Acceptée → nouvelle intervention, retour
+// phase 4 (phase 5.3.4). Refusée → litige (phase 5.3.5) : le paiement est
+// déjà suspendu, la vérification de l'incident étant restée négative (cf.
+// MettreEnPaiement, qui exige une vérification positive) — la résolution du
+// litige lui-même est hors du périmètre de ce graphe.
+func (s *IncidentService) EnregistrerReponseReclamation(ctx context.Context, ticketID, reclamationID int64, acceptee bool, reponseTexte string) error {
+	statutDescription := domain.ReclamationStatutRefusee
+	if acceptee {
+		statutDescription = domain.ReclamationStatutAcceptee
+	}
+	statutID, err := s.Repo.ReclamationStatutID(ctx, statutDescription)
+	if err != nil {
+		return fmt.Errorf("service: réponse réclamation id=%d: résolution du statut: %w", reclamationID, err)
+	}
+	if err := s.Repo.EnregistrerReponseReclamation(ctx, reclamationID, statutID, time.Now().UTC(), reponseTexte); err != nil {
+		return fmt.Errorf("service: réponse réclamation id=%d: %w", reclamationID, err)
+	}
+
+	if acceptee {
+		return s.passerEnSuiviIntervention(ctx, ticketID)
+	}
+
+	statutLitigeID, err := s.Repo.TicketStatutID(ctx, domain.TicketStatutLitige)
+	if err != nil {
+		return fmt.Errorf("service: réponse réclamation id=%d: résolution du statut litige: %w", reclamationID, err)
+	}
+	return s.Repo.UpdateTicketStatut(ctx, ticketID, statutLitigeID)
 }
 
 // EnregistrerFacture couvre la phase 5.5.1-5.5.3 (réception et extraction de
