@@ -23,8 +23,7 @@ type personneRow struct {
 	Email             *string   `json:"email"`
 	EstPhysique       *bool     `json:"est_physique"`
 	Reference         string    `json:"reference"`
-	IBAN              *string   `json:"iban"`
-	BIC               *string   `json:"bic"`
+	BanqueID          *int64    `json:"banque_id"`
 	EstGestionnaire   *bool     `json:"est_gestionnaire"`
 	CreePar           *int64    `json:"cree_par"`
 }
@@ -43,8 +42,7 @@ func (r personneRow) toDomain() *domain.Personne {
 		Email:             r.Email,
 		EstPhysique:       r.EstPhysique,
 		Reference:         r.Reference,
-		IBAN:              r.IBAN,
-		BIC:               r.BIC,
+		BanqueID:          r.BanqueID,
 		EstGestionnaire:   r.EstGestionnaire,
 		CreePar:           r.CreePar,
 	}

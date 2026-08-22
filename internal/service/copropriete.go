@@ -15,11 +15,11 @@ import (
 // créer une Copropriete. Nom et CreeParID sont obligatoires ; le reste est
 // optionnel et peut être complété plus tard (mise à jour ultérieure).
 //
-// Ne couvre volontairement pas les champs de CoproprieteBanque (iban, bic,
-// code_ics) : cette table séparée existe justement pour que RLS puisse la
-// verrouiller indépendamment de Copropriete (accès dirigeant/sys_admin
-// uniquement), et rien ne les renseigne encore — pas de
-// repository.InsertCoproprieteBanque pour l'instant, à ajouter via une
+// Ne couvre volontairement pas les champs de Banque (iban, bic, code_ics) :
+// cette table séparée existe justement pour que RLS puisse la verrouiller
+// indépendamment de Copropriete (accès dirigeant/sys_admin uniquement, plus
+// la personne elle-même pour sa propre ligne), et rien ne les renseigne
+// encore — pas de repository.InsertBanque pour l'instant, à ajouter via une
 // fonction Postgres en RPC le jour où ce sera nécessaire (deux écritures
 // liées, cf. CLAUDE.md), plutôt que deux appels REST séparés.
 type CreateCoproprieteInput struct {

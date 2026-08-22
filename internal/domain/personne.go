@@ -26,8 +26,7 @@ type Personne struct {
 	Email             *string
 	EstPhysique       *bool
 	Reference         string // référence lisible (ex: "PER1"), générée par la base (DEFAULT), jamais fournie à l'insertion
-	IBAN              *string
-	BIC               *string
+	BanqueID          *int64 // FK -> banque.id (nullable, 1-1) — iban/bic vivent dans Banque, pas ici (cf. domain.Banque)
 	EstGestionnaire   *bool  // membre du cabinet de gestion — pas dérivable d'ailleurs (un collaborateur peut exister sans copropriete assignée), reste un attribut propre
 	CreePar           *int64 // FK -> personne.id (gestionnaire à l'origine de la création ; auto-référence)
 }

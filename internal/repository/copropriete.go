@@ -35,6 +35,7 @@ type coproprieteRow struct {
 	MisAJour                          *time.Time `json:"mis_a_jour"`
 	CreePar                           *int64     `json:"cree_par"`
 	Reference                         string     `json:"reference"`
+	BanqueID                          *int64     `json:"banque_id"`
 }
 
 func (r coproprieteRow) toDomain() *domain.Copropriete {
@@ -63,6 +64,7 @@ func (r coproprieteRow) toDomain() *domain.Copropriete {
 		MisAJour:                          r.MisAJour,
 		CreePar:                           r.CreePar,
 		Reference:                         r.Reference,
+		BanqueID:                          r.BanqueID,
 	}
 }
 
@@ -90,6 +92,7 @@ type coproprieteInsert struct {
 	MandatDateDebut                   *Date    `json:"mandat_date_debut,omitempty"`
 	MandatDureeEnMois                 *int64   `json:"mandat_duree_en_mois,omitempty"`
 	CreePar                           *int64   `json:"cree_par,omitempty"`
+	BanqueID                          *int64   `json:"banque_id,omitempty"`
 }
 
 // InsertCopropriete insère une nouvelle Copropriete et retourne la ligne
@@ -116,6 +119,7 @@ func (c *Client) InsertCopropriete(ctx context.Context, cop *domain.Copropriete)
 		MandatDateDebut:                   timePtrToDate(cop.MandatDateDebut),
 		MandatDureeEnMois:                 cop.MandatDureeEnMois,
 		CreePar:                           cop.CreePar,
+		BanqueID:                          cop.BanqueID,
 	}}
 	var rows []coproprieteRow
 	if err := c.doWithPrefer(ctx, http.MethodPost, "/copropriete", payload, "return=representation", &rows); err != nil {
